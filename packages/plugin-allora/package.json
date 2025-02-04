@@ -7,13 +7,13 @@
 	"dependencies": {
 		"@elizaos/core": "workspace:*",
 		"node-cache": "5.1.2",
-		"vitest": "2.1.8",
+		"vitest": "2.1.9",
 		"@alloralabs/allora-sdk": "^0.1.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
 		"tsup": "8.3.5",
-		"vitest": "2.1.8"
+		"vitest": "2.1.9"
 	},
 	"scripts": {
 		"build": "tsup --format esm --dts",
