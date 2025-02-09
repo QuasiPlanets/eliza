@@ -49,6 +49,7 @@ characters/**/secrets.json
 characters/**/*.env
 characters/**/*.key
 characters/**/private/
+characters/eternalai.characters.json
 
 packages/core/src/providers/cache
 packages/core/src/providers/cache/*
