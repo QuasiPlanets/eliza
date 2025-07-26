@@ -21,6 +21,8 @@
     "license": "MIT",
     "dependencies": {
         "@elizaos/core": "*",
+        "@elizaos/plugin-discord": "1.2.5",
+        "@elizaos/plugin-ollama": "1.2.1",
         "axios": "^1.6.0"
     },
     "devDependencies": {
