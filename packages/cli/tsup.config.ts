@@ -13,6 +13,7 @@ export default defineConfig({
     'src/commands/create/actions/index.ts',
     'src/commands/create/manage/index.ts',
     'src/commands/shared/index.ts',
+    'src/characters/*.ts',
   ],
   format: ['esm'],
   dts: true,
