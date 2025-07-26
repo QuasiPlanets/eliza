@@ -227,19 +227,19 @@ export function getElizaCharacter(): Character {
     // Core plugins first
     '@elizaos/plugin-sql',
 
-    // ComfyUI plugin (if API URL is configured)
-    ...(process.env.COMFYUI_API_URL?.trim() ? ['@elizaos/plugin-comfyui'] : []),
-
     // Text-only plugins (no embedding support)
     ...(process.env.ANTHROPIC_API_KEY?.trim() ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENROUTER_API_KEY?.trim() ? ['@elizaos/plugin-openrouter'] : []),
 
     // Platform plugins
-    ...(process.env.DISCORD_TOKEN?.trim() ? ['@elizaos/plugin-discord'] : []),
+    ...(process.env.DISCORD_API_TOKEN?.trim() ? ['@elizaos/plugin-discord'] : []),
     ...(process.env.ELEVENLABS_API_KEY?.trim() ? ['@elizaos/plugin-elevenlabs'] : []),
 
     // Bootstrap plugin
     ...(!process.env.IGNORE_BOOTSTRAP ? ['@elizaos/plugin-bootstrap'] : []),
+
+    // ComfyUI plugin (loads AFTER bootstrap to override GENERATE_IMAGE action)
+    ...(process.env.COMFYUI_API_URL?.trim() ? ['@elizaos/plugin-comfyui'] : []),
 
     // Embedding-capable plugins (always last for fallback behavior)
     ...(process.env.OPENAI_API_KEY?.trim() ? ['@elizaos/plugin-openai'] : []),

@@ -1,15 +1,32 @@
 import axios from 'axios';
-import { Service, type IAgentRuntime } from '@elizaos/core';
+import { Service, type IAgentRuntime, type Media, ContentType } from '@elizaos/core';
+
+interface ComfyUIQueueStatus {
+    queue_running: any[];
+    queue_pending: any[];
+}
+
+
+
+interface ComfyUIImageResult {
+    url: string;
+    base64?: string;
+    filename: string;
+    metadata: any;
+    media?: Media;
+}
 
 export class ComfyUIService extends Service {
     static serviceType = 'comfyui';
-    capabilityDescription = 'ComfyUI API integration for image and audio generation';
+    capabilityDescription = 'ComfyUI API integration for image and audio generation with full endpoint support';
 
     private apiUrl: string;
+    private apiKey?: string;
 
     constructor(runtime: IAgentRuntime) {
         super(runtime);
         this.apiUrl = runtime.getSetting('COMFYUI_API_URL') || process.env.COMFYUI_API_URL || 'http://comfyui:8188';
+        this.apiKey = runtime.getSetting('COMFYUI_API_KEY') || process.env.COMFYUI_API_KEY;
     }
 
     static async start(runtime: IAgentRuntime): Promise<ComfyUIService> {
@@ -20,14 +37,106 @@ export class ComfyUIService extends Service {
         // Cleanup if needed
     }
 
-    async generateImage(prompt: string, params: Record<string, any> = {}): Promise<{ url: string; metadata: any }> {
+    /**
+     * Get queue status from ComfyUI
+     */
+    async getQueueStatus(): Promise<ComfyUIQueueStatus> {
         try {
-            // Create a simple ComfyUI workflow for image generation
+            const response = await axios.get(`${this.apiUrl}/queue`, {
+                headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error('Failed to get queue status:', error);
+            throw new Error(`Failed to get queue status: ${error.message}`);
+        }
+    }
+
+    /**
+     * Get execution history from ComfyUI
+     */
+    async getHistory(promptId?: string): Promise<any> {
+        try {
+            const url = promptId ? `${this.apiUrl}/history/${promptId}` : `${this.apiUrl}/history`;
+            const response = await axios.get(url, {
+                headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error('Failed to get history:', error);
+            throw new Error(`Failed to get history: ${error.message}`);
+        }
+    }
+
+    /**
+     * Interrupt current execution
+     */
+    async interruptExecution(): Promise<void> {
+        try {
+            await axios.post(`${this.apiUrl}/interrupt`, {}, {
+                headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
+            });
+        } catch (error: any) {
+            console.error('Failed to interrupt execution:', error);
+            throw new Error(`Failed to interrupt execution: ${error.message}`);
+        }
+    }
+
+    /**
+     * Upload image to ComfyUI
+     */
+    async uploadImage(imageData: Buffer, filename: string): Promise<string> {
+        try {
+            const formData = new FormData();
+            const blob = new Blob([imageData]);
+            formData.append('image', blob, filename);
+
+            const response = await axios.post(`${this.apiUrl}/upload/image`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    ...(this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {}),
+                },
+            });
+
+            return response.data.name || filename;
+        } catch (error: any) {
+            console.error('Failed to upload image:', error);
+            throw new Error(`Failed to upload image: ${error.message}`);
+        }
+    }
+
+    /**
+     * Fetch image from ComfyUI and convert to base64 for universal access
+     */
+    private async fetchImageAsBase64(imageUrl: string): Promise<string> {
+        try {
+            const response = await axios.get(imageUrl, {
+                responseType: 'arraybuffer',
+                headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
+            });
+
+            const buffer = Buffer.from(response.data);
+            const contentType = response.headers['content-type'] || 'image/png';
+            return `data:${contentType};base64,${buffer.toString('base64')}`;
+        } catch (error: any) {
+            console.error('Failed to fetch image as base64:', error);
+            throw new Error(`Failed to fetch image: ${error.message}`);
+        }
+    }
+
+    /**
+     * Generate image with enhanced response handling
+     */
+    async generateImage(prompt: string, params: Record<string, any> = {}): Promise<ComfyUIImageResult> {
+        try {
+            // Create a workflow for image generation
             const workflow = this.createImageWorkflow(prompt, params);
-            
+
             // Submit the workflow to ComfyUI
             const response = await axios.post(`${this.apiUrl}/prompt`, {
                 prompt: workflow
+            }, {
+                headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
             });
 
             if (!response.data || !response.data.prompt_id) {
@@ -38,11 +147,33 @@ export class ComfyUIService extends Service {
             console.log(`ComfyUI workflow submitted with prompt ID: ${promptId}`);
 
             // Wait for the image to be generated
-            const imageUrl = await this.waitForImage(promptId);
+            const imageInfo = await this.waitForImage(promptId);
+
+            // Fetch the image and convert to base64 for universal access
+            const base64Image = await this.fetchImageAsBase64(imageInfo.url);
+
+            // Create Media object for ElizaOS
+            const media: Media = {
+                id: `comfyui-${promptId}-${Date.now()}`,
+                url: base64Image, // Use base64 data URL for universal access
+                title: `Generated image: ${prompt.substring(0, 50)}...`,
+                source: 'comfyui',
+                contentType: ContentType.IMAGE,
+                description: prompt,
+            };
 
             return {
-                url: imageUrl,
-                metadata: { promptId, prompt, params }
+                url: imageInfo.url, // Original ComfyUI URL
+                base64: base64Image, // Base64 for universal access
+                filename: imageInfo.filename,
+                metadata: {
+                    promptId,
+                    prompt,
+                    params,
+                    comfyui_url: imageInfo.url,
+                    generated_at: new Date().toISOString()
+                },
+                media: media
             };
         } catch (err: any) {
             throw new Error(`ComfyUI image generation failed: ${err.message}`);
@@ -50,7 +181,7 @@ export class ComfyUIService extends Service {
     }
 
     async generateAudio(_prompt: string, _params: Record<string, any> = {}): Promise<{ url: string; metadata: any }> {
-        // TODO: Implement audio generation
+        // TODO: Implement audio generation workflow
         throw new Error('Audio generation not yet implemented');
     }
 
@@ -60,6 +191,7 @@ export class ComfyUIService extends Service {
         const cfg = params.cfg || 1.0;
         const width = params.width || 1024;
         const height = params.height || 1024;
+        const model = params.model || "flux1-dev-fp8.safetensors";
 
         return {
             "6": {
@@ -93,7 +225,7 @@ export class ComfyUIService extends Service {
             },
             "30": {
                 "inputs": {
-                    "ckpt_name": "flux1-dev-fp8.safetensors"
+                    "ckpt_name": model
                 },
                 "class_type": "CheckpointLoaderSimple"
             },
@@ -114,14 +246,14 @@ export class ComfyUIService extends Service {
             },
             "33": {
                 "inputs": {
-                    "text": "",
+                    "text": params.negative_prompt || "",
                     "clip": ["30", 1]
                 },
                 "class_type": "CLIPTextEncode"
             },
             "35": {
                 "inputs": {
-                    "guidance": 3.5,
+                    "guidance": params.guidance || 3.5,
                     "conditioning": ["6", 0]
                 },
                 "class_type": "FluxGuidance"
@@ -129,33 +261,62 @@ export class ComfyUIService extends Service {
         };
     }
 
-    private async waitForImage(promptId: string, maxWaitTime: number = 60000): Promise<string> {
+    private async waitForImage(promptId: string, maxWaitTime: number = 120000): Promise<{ url: string; filename: string }> {
         const startTime = Date.now();
-        
+
         while (Date.now() - startTime < maxWaitTime) {
             try {
                 // Check history for the completed image
-                const historyResponse = await axios.get(`${this.apiUrl}/history/${promptId}`);
+                const historyResponse = await axios.get(`${this.apiUrl}/history/${promptId}`, {
+                    headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
+                });
                 const history = historyResponse.data;
-                
+
                 if (history[promptId] && history[promptId].outputs) {
                     const outputs = history[promptId].outputs;
                     const nodeOutput = outputs['9']; // SaveImage node
-                    
+
                     if (nodeOutput && nodeOutput.images && nodeOutput.images.length > 0) {
                         const image = nodeOutput.images[0];
-                        return `${this.apiUrl}/view?filename=${image.filename}&subfolder=${image.subfolder}&type=${image.type}`;
+                        const imageUrl = `${this.apiUrl}/view?filename=${image.filename}&subfolder=${image.subfolder}&type=${image.type}`;
+                        return {
+                            url: imageUrl,
+                            filename: image.filename
+                        };
                     }
                 }
-                
+
+                // Check if the job failed
+                if (history[promptId] && history[promptId].status) {
+                    const status = history[promptId].status;
+                    if (status.status_str === 'error') {
+                        throw new Error('ComfyUI workflow execution failed');
+                    }
+                }
+
                 // Wait a bit before checking again
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 2000));
             } catch (error) {
                 console.warn('Error checking image status:', error);
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
-        
+
         throw new Error('Image generation timed out');
+    }
+
+    /**
+     * Get available ComfyUI nodes/models
+     */
+    async getObjectInfo(): Promise<any> {
+        try {
+            const response = await axios.get(`${this.apiUrl}/object_info`, {
+                headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error('Failed to get object info:', error);
+            throw new Error(`Failed to get object info: ${error.message}`);
+        }
     }
 }

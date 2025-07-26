@@ -1,6 +1,6 @@
 import { type Character, logger } from '@elizaos/core';
 import { loadModule, loadModuleSync } from '@/src/utils/module-loader';
-import { character as defaultCharacter } from '../../../characters/eliza';
+import { getElizaCharacter } from '../../../characters/eliza';
 
 /**
  * Attempts to load a file from the given file path.
@@ -113,7 +113,7 @@ export async function loadCharacters(charactersArg: string): Promise<Character[]
   // CLI-specific behavior: fallback to default character if no characters found
   if (loadedCharacters.length === 0) {
     logger.info('No characters found, using default character');
-    return [defaultCharacter];
+    return [getElizaCharacter()];
   }
 
   return loadedCharacters;
