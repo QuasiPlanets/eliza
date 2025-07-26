@@ -227,57 +227,41 @@ export function getElizaCharacter(): Character {
     // Core plugins first
     '@elizaos/plugin-sql',
 
+    // ComfyUI plugin (if API URL is configured)
+    ...(process.env.COMFYUI_API_URL?.trim() ? ['@elizaos/plugin-comfyui'] : []),
+
     // Text-only plugins (no embedding support)
     ...(process.env.ANTHROPIC_API_KEY?.trim() ? ['@elizaos/plugin-anthropic'] : []),
     ...(process.env.OPENROUTER_API_KEY?.trim() ? ['@elizaos/plugin-openrouter'] : []),
 
-    // Embedding-capable plugins (optional, based on available credentials)
-    ...(process.env.OPENAI_API_KEY?.trim() ? ['@elizaos/plugin-openai'] : []),
-    ...(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ? ['@elizaos/plugin-google-genai'] : []),
-
-    // Ollama as fallback (only if no main LLM providers are configured)
-    ...(process.env.OLLAMA_API_ENDPOINT?.trim() ? ['@elizaos/plugin-ollama'] : []),
-
     // Platform plugins
-    ...(process.env.DISCORD_API_TOKEN?.trim() ? ['@elizaos/plugin-discord'] : []),
-    ...(process.env.TWITTER_API_KEY?.trim() &&
-      process.env.TWITTER_API_SECRET_KEY?.trim() &&
-      process.env.TWITTER_ACCESS_TOKEN?.trim() &&
-      process.env.TWITTER_ACCESS_TOKEN_SECRET?.trim()
-      ? ['@elizaos/plugin-twitter']
-      : []),
-    ...(process.env.TELEGRAM_BOT_TOKEN?.trim() ? ['@elizaos/plugin-telegram'] : []),
-
-    // TTS plugins - ElevenLabs first, Coqui TTS as fallback
+    ...(process.env.DISCORD_TOKEN?.trim() ? ['@elizaos/plugin-discord'] : []),
     ...(process.env.ELEVENLABS_API_KEY?.trim() ? ['@elizaos/plugin-elevenlabs'] : []),
-    ...(process.env.COQUI_TTS_URL?.trim() ? ['@elizaos/plugin-coqui-tts'] : []),
 
     // Bootstrap plugin
     ...(!process.env.IGNORE_BOOTSTRAP ? ['@elizaos/plugin-bootstrap'] : []),
+
+    // Embedding-capable plugins (always last for fallback behavior)
+    ...(process.env.OPENAI_API_KEY?.trim() ? ['@elizaos/plugin-openai'] : []),
+    ...(process.env.GOOGLE_API_KEY?.trim() ? ['@elizaos/plugin-google'] : []),
+    ...(process.env.COHERE_API_KEY?.trim() ? ['@elizaos/plugin-cohere'] : []),
+    ...(process.env.OLLAMA_API_ENDPOINT?.trim() ? ['@elizaos/plugin-ollama'] : []),
   ];
 
   return {
-    ...baseCharacter,
+    name: 'Eliza',
+    bio: 'A helpful AI assistant with access to various tools and capabilities.',
+    system: `You are Eliza, a helpful AI assistant. You have access to various tools and capabilities including:
+
+- Text generation and conversation
+- Image generation (when ComfyUI is configured)
+- Audio generation (when ComfyUI is configured)
+- Database access and memory
+- Platform integrations (Discord, etc.)
+
+Always be helpful, creative, and engaging in your responses. When users ask for images or audio, use the appropriate generation actions if available.`,
     plugins,
-    settings: {
-      ...baseCharacter.settings,
-      // ElevenLabs settings (if available)
-      ...(process.env.ELEVENLABS_API_KEY?.trim() && {
-        elevenlabs: {
-          voice: 'khYwAWwYSjlxlcrwGQ16', // User's specified voice ID
-          model: 'eleven_multilingual_v2'
-        }
-      }),
-      // Coqui TTS settings (if available)
-      ...(process.env.COQUI_TTS_URL?.trim() && {
-        coquiTts: {
-          url: process.env.COQUI_TTS_URL || 'http://limn_nivean_coqui_tts:9000',
-          voice: process.env.COQUI_TTS_VOICE || 'default',
-          language: process.env.COQUI_TTS_LANGUAGE || 'en'
-        }
-      })
-    }
-  } as Character;
+  };
 }
 
 /**
