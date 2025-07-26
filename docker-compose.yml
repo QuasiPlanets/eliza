@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  limn_nivean_postgres:
+    image: pgvector/pgvector:pg16
+    container_name: limn_nivean_postgres
+    environment:
+      - POSTGRES_USER=elizaos
+      - POSTGRES_PASSWORD=iuahrefgpuaheoo
+      - POSTGRES_DB=elizaos
+    ports:
+      - "5432:5432"
+    volumes:
+      - elizaos_pgdata:/var/lib/postgresql/data
+    networks:
+      - elizaos_net
+
+  limn_nivean_ollama:
+    image: ollama/ollama:latest
+    container_name: limn_nivean_ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_DEBUG=1
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama/models/
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    networks:
+      - elizaos_net
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - NET_ADMIN
+
+networks:
+  elizaos_net:
+    driver: bridge
+
+volumes:
+  elizaos_pgdata:
+  ollama_models:

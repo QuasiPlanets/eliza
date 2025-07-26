@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  limn_nivean_postgres:
+    image: pgvector/pgvector:pg16
+    container_name: limn_nivean_postgres
+    environment:
+      - POSTGRES_USER=elizaos
+      - POSTGRES_PASSWORD=iuahrefgpuaheoo
+      - POSTGRES_DB=elizaos
+    ports:
+      - "5432:5432"
+    volumes:
+      - elizaos_pgdata:/var/lib/postgresql/data
+    networks:
+      - elizaos_net
+
+  limn_nivean_ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    container_name: limn_nivean_ollama
+    networks:
+      - elizaos_net
+    volumes:
+      - ollama_models:/root/.ollama/models/
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_DEBUG=1
+      - HTTP_PROXY=http://limn_nivean_vpn:8888
+      - HTTPS_PROXY=http://limn_nivean_vpn:8888
+      - NO_PROXY=localhost,127.0.0.1,::1,0.0.0.0,limn_nivean_ollama,limn_nivean_postgres
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - NET_ADMIN
+    dns:
+      - 172.18.0.2
+
+  # Coqui TTS Service - Local high-quality TTS alternative to ElevenLabs
+  limn_nivean_coqui_tts:
+    image: coqui/xtts-v2:latest
+    container_name: limn_nivean_coqui_tts
+    networks:
+      - elizaos_net
+    ports:
+      - "9000:9000"
+    volumes:
+      - coqui_tts_cache:/app/cache
+      - coqui_tts_models:/app/models
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MODEL_NAME=tts_models/multilingual/multi-dataset/xtts_v2
+      - USE_CUDA=true
+      - HTTP_PROXY=http://limn_nivean_vpn:8888
+      - HTTPS_PROXY=http://limn_nivean_vpn:8888
+      - NO_PROXY=localhost,127.0.0.1,::1,0.0.0.0,limn_nivean_coqui_tts
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    dns:
+      - 172.18.0.2
+
+networks:
+  elizaos_net:
+    driver: bridge
+
+volumes:
+  elizaos_pgdata:
+  ollama_models:
+  coqui_tts_cache:
+  coqui_tts_models:

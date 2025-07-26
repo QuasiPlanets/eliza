@@ -77,6 +77,8 @@
     "utf-8-validate"
   ],
   "dependencies": {
+    "@elizaos/plugin-discord": "1.2.5",
+    "@elizaos/plugin-elevenlabs": "^1.0.5",
     "helmet": "^8.1.0"
   }
 }

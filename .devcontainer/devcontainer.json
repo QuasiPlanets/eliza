@@ -16,7 +16,8 @@
     //"--volume=/mnt/wslg:/mnt/wslg", // uncomment for WSL
     "--gpus=all", // ! uncomment for vGPU
     //"--device=/dev/dxg", // uncomment this for vGPU under WSL
-    "--device=/dev/dri"
+    "--device=/dev/dri",
+    "--network=devcontainer_elizaos_net"
   ],
   "containerEnv": {
     //"MESA_D3D12_DEFAULT_ADAPTER_NAME": "NVIDIA", // uncomment for WSL

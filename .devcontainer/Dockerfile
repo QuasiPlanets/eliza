@@ -16,7 +16,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g bun@$1.2.2
+RUN rm -rf /root/.bun && curl -fsSL https://bun.sh/install | BUN_VERSION=${BUN_VER} bash
 
 # Set Python 3 as the default python
 RUN ln -s /usr/bin/python3 /usr/bin/python
