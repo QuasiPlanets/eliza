@@ -6,7 +6,7 @@
 **/build/**
 **/cache/**
 
-.env
+#.env
 *.lock
 codecov.yml
 LICENSE
