@@ -110,16 +110,26 @@ export class ComfyUIService extends Service {
      */
     private async fetchImageAsBase64(imageUrl: string): Promise<string> {
         try {
-            const response = await axios.get(imageUrl, {
+            console.log(`[ComfyUI] Fetching image from: ${imageUrl}`);
+
+            // Convert localhost URL back to internal URL for fetching
+            const internalUrl = this.convertToInternalUrl(imageUrl);
+            console.log(`[ComfyUI] Using internal URL for fetch: ${internalUrl}`);
+
+            const response = await axios.get(internalUrl, {
                 responseType: 'arraybuffer',
                 headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
+                timeout: 30000
             });
 
             const buffer = Buffer.from(response.data);
-            const contentType = response.headers['content-type'] || 'image/png';
-            return `data:${contentType};base64,${buffer.toString('base64')}`;
+            const base64 = buffer.toString('base64');
+            const mimeType = response.headers['content-type'] || 'image/png';
+
+            console.log(`[ComfyUI] Successfully converted image to base64 (${base64.length} chars)`);
+            return `data:${mimeType};base64,${base64}`;
         } catch (error: any) {
-            console.error('Failed to fetch image as base64:', error);
+            console.error('Failed to fetch image:', error);
             throw new Error(`Failed to fetch image: ${error.message}`);
         }
     }
@@ -150,7 +160,9 @@ export class ComfyUIService extends Service {
             const imageInfo = await this.waitForImage(promptId);
 
             // Fetch the image and convert to base64 for universal access
+            console.log(`[ComfyUI] Fetching image from: ${imageInfo.url}`);
             const base64Image = await this.fetchImageAsBase64(imageInfo.url);
+            console.log(`[ComfyUI] Base64 conversion successful: ${base64Image.substring(0, 50)}...`);
 
             // Create Media object for ElizaOS
             const media: Media = {
@@ -261,7 +273,7 @@ export class ComfyUIService extends Service {
         };
     }
 
-    private async waitForImage(promptId: string, maxWaitTime: number = 120000): Promise<{ url: string; filename: string }> {
+    private async waitForImage(promptId: string, maxWaitTime: number = 300000): Promise<{ url: string; filename: string }> {
         const startTime = Date.now();
 
         while (Date.now() - startTime < maxWaitTime) {
@@ -278,9 +290,16 @@ export class ComfyUIService extends Service {
 
                     if (nodeOutput && nodeOutput.images && nodeOutput.images.length > 0) {
                         const image = nodeOutput.images[0];
-                        const imageUrl = `${this.apiUrl}/view?filename=${image.filename}&subfolder=${image.subfolder}&type=${image.type}`;
+
+                        // Convert internal Docker URLs to localhost for universal access
+                        const internalImageUrl = `${this.apiUrl}/view?filename=${image.filename}&subfolder=${image.subfolder}&type=${image.type}`;
+                        const localhostImageUrl = this.convertToLocalhostUrl(internalImageUrl);
+
+                        console.log(`[ComfyUI] Internal URL: ${internalImageUrl}`);
+                        console.log(`[ComfyUI] Localhost URL: ${localhostImageUrl}`);
+
                         return {
-                            url: imageUrl,
+                            url: localhostImageUrl,
                             filename: image.filename
                         };
                     }
@@ -303,6 +322,24 @@ export class ComfyUIService extends Service {
         }
 
         throw new Error('Image generation timed out');
+    }
+
+    /**
+     * Convert internal Docker URLs to localhost for universal access
+     */
+    private convertToLocalhostUrl(url: string): string {
+        // Replace internal Docker IP addresses with localhost
+        // This handles cases like 172.19.0.4:8188 -> 127.0.0.1:8188
+        return url.replace(/https?:\/\/172\.\d+\.\d+\.\d+:\d+/, 'http://127.0.0.1:8188');
+    }
+
+    /**
+     * Convert localhost URLs back to internal Docker URLs for fetching
+     */
+    private convertToInternalUrl(url: string): string {
+        // Convert localhost URLs back to internal Docker URLs for fetching
+        // This handles cases like 127.0.0.1:8188 -> 172.19.0.4:8188
+        return url.replace(/https?:\/\/127\.0\.0\.1:8188/, this.apiUrl);
     }
 
     /**

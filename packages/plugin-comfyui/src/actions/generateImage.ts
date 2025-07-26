@@ -1,23 +1,45 @@
-import type { Action, IAgentRuntime, Memory, State, ActionResult } from '@elizaos/core';
+import type { Action, IAgentRuntime, Memory, State, HandlerCallback } from '@elizaos/core';
+import { ContentType } from '@elizaos/core';
 import { ComfyUIService } from '../service';
+import { v4 } from 'uuid';
 
 export const generateImageAction: Action = {
     name: 'GENERATE_IMAGE',
     similes: ['CREATE_IMAGE', 'DRAW_IMAGE', 'MAKE_IMAGE', 'GENERATE_PICTURE', 'DRAW_PICTURE'],
     description: 'Generates an image using ComfyUI based on a text prompt with enhanced parameters support',
-    validate: async (_runtime: IAgentRuntime, message: Memory, _state?: State) => {
+    validate: async (runtime: IAgentRuntime, message: Memory, _state?: State) => {
         const text = message.content.text?.toLowerCase() || '';
+
+        // Only proceed if ComfyUI is configured
+        const comfyuiUrl = runtime.getSetting('COMFYUI_API_URL') || process.env.COMFYUI_API_URL;
+        if (!comfyuiUrl?.trim()) {
+            console.log(`[ComfyUI] Validation failed: No COMFYUI_API_URL configured`);
+            return false;
+        }
 
         // Check for image generation keywords
         const imageKeywords = [
-            'generate image', 'create image', 'draw', 'picture', 'photo', 'image of',
-            'generate picture', 'create picture', 'make an image', 'make a picture',
-            'draw an image', 'draw a picture', 'generate art', 'create art'
+            'generate image', 'create image', 'draw image', 'make image',
+            'generate picture', 'create picture', 'draw picture', 'make picture',
+            'generate art', 'create art', 'draw art', 'make art',
+            'make an image', 'draw a picture'
         ];
 
-        return imageKeywords.some(keyword => text.includes(keyword));
+        const hasImageKeyword = imageKeywords.some(keyword => text.includes(keyword));
+        console.log(`[ComfyUI] Validation - Text: "${text}"`);
+        console.log(`[ComfyUI] Validation - Has image keyword: ${hasImageKeyword}`);
+        console.log(`[ComfyUI] Validation - ComfyUI URL: ${comfyuiUrl}`);
+        console.log(`[ComfyUI] Validation - Result: ${hasImageKeyword}`);
+
+        return hasImageKeyword;
     },
-    handler: async (runtime: IAgentRuntime, message: Memory, _state?: State): Promise<ActionResult> => {
+    handler: async (
+        runtime: IAgentRuntime,
+        message: Memory,
+        _state?: State,
+        _options?: any,
+        callback?: HandlerCallback
+    ): Promise<void> => {
         try {
             const text = message.content.text || '';
 
@@ -25,11 +47,13 @@ export const generateImageAction: Action = {
             const promptMatch = text.match(/(?:generate|create|make|draw)\s+(?:an?\s+)?(?:image|picture|photo|art)\s+(?:of\s+)?(.+)/i);
 
             if (!promptMatch) {
-                return {
-                    success: false,
-                    text: 'Please provide a description of the image you want me to generate.',
-                    error: 'No image prompt found in message'
-                };
+                if (callback) {
+                    await callback({
+                        text: 'Please provide a description of the image you want me to generate.',
+                        thought: 'No valid image prompt found in the user message.'
+                    });
+                }
+                return;
             }
 
             const prompt = promptMatch[1].trim();
@@ -38,10 +62,13 @@ export const generateImageAction: Action = {
             const params: Record<string, any> = {};
 
             // Extract dimensions if specified
-            const dimensionMatch = text.match(/(\d+)x(\d+)/i);
+            const dimensionMatch = text.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})/);
             if (dimensionMatch) {
                 params.width = parseInt(dimensionMatch[1]);
                 params.height = parseInt(dimensionMatch[2]);
+            } else {
+                params.width = 1024;
+                params.height = 1024;
             }
 
             // Extract style/model preferences
@@ -61,105 +88,103 @@ export const generateImageAction: Action = {
             // Get the ComfyUI service
             const comfyuiService = runtime.getService('comfyui') as ComfyUIService;
             if (!comfyuiService) {
-                return {
-                    success: false,
-                    text: 'ComfyUI service is not available. Please check your configuration.',
-                    error: 'ComfyUI service not found'
-                };
+                if (callback) {
+                    await callback({
+                        text: 'ComfyUI service is not available. Please check your configuration.',
+                        thought: 'ComfyUI service is not registered with the runtime.'
+                    });
+                }
+                return;
+            }
+
+            // Send initial response
+            if (callback) {
+                await callback({
+                    text: `I'm generating an image based on your prompt: "${prompt}". This will take 2-3 minutes with the Flux model. Please wait...`,
+                    thought: `Starting ComfyUI image generation with prompt: "${prompt}". Using Flux model which requires extended processing time.`,
+                    actions: ['GENERATE_IMAGE']
+                });
             }
 
             // Generate the image with enhanced result
             const result = await comfyuiService.generateImage(prompt, params);
 
-            return {
-                success: true,
-                text: `I've generated an image based on your prompt: "${prompt}". ${params.width && params.height ? `Dimensions: ${params.width}x${params.height}. ` : ''}The image has been created successfully and should be displayed above.`,
-                data: {
-                    imageUrl: result.base64, // Base64 data URL for universal access
-                    originalUrl: result.url, // Original ComfyUI URL
-                    prompt: prompt,
-                    parameters: params,
-                    metadata: result.metadata,
-                    filename: result.filename,
-                    attachments: result.media ? [result.media] : [], // Include media in data
-                    media: result.media // Also include as media for compatibility
-                }
-            };
+            console.log(`[ComfyUI Action] Image generated. Original URL: ${result.url}`);
+            console.log(`[ComfyUI Action] Base64 available: ${result.base64 ? 'YES' : 'NO'}`);
+            console.log(`[ComfyUI Action] Using URL: ${result.base64 || result.url}`);
 
-        } catch (error: any) {
-            console.error('Error in generateImageAction:', error);
-
-            // Provide more specific error messages
-            let errorMessage = 'Sorry, I couldn\'t generate the image. ';
-            if (error.message.includes('timed out')) {
-                errorMessage += 'The image generation took too long. Please try again.';
-            } else if (error.message.includes('ComfyUI service')) {
-                errorMessage += 'ComfyUI service is not available. Please check the configuration.';
-            } else if (error.message.includes('workflow')) {
-                errorMessage += 'There was an issue with the image generation workflow.';
-            } else {
-                errorMessage += 'Please try again with a different prompt.';
+            // Send the response with the generated image
+            if (callback) {
+                await callback({
+                    text: `I've generated an image based on your prompt: "${prompt}". ${params.width && params.height ? `Dimensions: ${params.width}x${params.height}.` : ''}`,
+                    attachments: [{
+                        id: v4(),
+                        url: result.base64 || result.url, // Use base64 for universal access, fallback to original URL
+                        title: `Generated Image: ${prompt.substring(0, 50)}...`,
+                        contentType: ContentType.IMAGE,
+                        description: prompt
+                    }],
+                    thought: `Successfully generated image using ComfyUI with prompt: "${prompt}"`,
+                    actions: ['GENERATE_IMAGE']
+                });
             }
 
-            return {
-                success: false,
-                text: errorMessage,
-                error: `Image generation failed: ${error.message}`
-            };
+        } catch (error: any) {
+            console.error('ComfyUI image generation error:', error);
+            if (callback) {
+                await callback({
+                    text: 'Sorry, I encountered an error while generating the image. Please try again later.',
+                    thought: `ComfyUI image generation failed: ${error.message || 'Unknown error'}`
+                });
+            }
         }
     },
+
     examples: [
         [
             {
                 name: '{{name1}}',
-                content: { text: 'Generate an image of a beautiful sunset over the ocean' }
+                content: {
+                    text: 'Can you generate an image of a beautiful sunset over mountains?',
+                },
             },
             {
-                name: 'Eliza',
+                name: '{{name2}}',
                 content: {
-                    text: 'I\'ve generated an image of a beautiful sunset over the ocean. The image has been created successfully and should be displayed above.',
-                    attachments: []
-                }
-            }
+                    text: "I'll create a beautiful sunset image for you. Please wait while I generate it...",
+                    actions: ['GENERATE_IMAGE'],
+                },
+            },
         ],
         [
             {
                 name: '{{name1}}',
-                content: { text: 'Create a 1024x1024 picture of a cute cat playing with yarn' }
+                content: {
+                    text: 'Create an image of a futuristic city with flying cars',
+                },
             },
             {
-                name: 'Eliza',
+                name: '{{name2}}',
                 content: {
-                    text: 'I\'ve generated an image of a cute cat playing with yarn. Dimensions: 1024x1024. The image has been created successfully and should be displayed above.',
-                    attachments: []
-                }
-            }
+                    text: 'Creating a futuristic cityscape with flying cars for you. This will take a few minutes...',
+                    actions: ['GENERATE_IMAGE'],
+                },
+            },
         ],
         [
             {
                 name: '{{name1}}',
-                content: { text: 'Draw a futuristic cityscape at night, avoid: cars, people' }
+                content: {
+                    text: 'Draw me a picture of a cute cat sitting in a garden',
+                },
             },
             {
-                name: 'Eliza',
+                name: '{{name2}}',
                 content: {
-                    text: 'I\'ve generated an image of a futuristic cityscape at night. The image has been created successfully and should be displayed above.',
-                    attachments: []
-                }
-            }
+                    text: "I'll draw a cute cat in a garden setting for you. Please wait while I create this image...",
+                    actions: ['GENERATE_IMAGE'],
+                },
+            },
         ],
-        [
-            {
-                name: '{{name1}}',
-                content: { text: 'Generate realistic art of a mountain landscape' }
-            },
-            {
-                name: 'Eliza',
-                content: {
-                    text: 'I\'ve generated a realistic image of a mountain landscape. The image has been created successfully and should be displayed above.',
-                    attachments: []
-                }
-            }
-        ]
-    ]
+    ] as any,
 };
