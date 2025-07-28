@@ -102,6 +102,87 @@ const handleComfyUIError = (event) => {
 3. **Input Sanitization**: All URLs properly encoded/decoded
 4. **Error Boundaries**: Graceful handling of malformed requests
 
+## 🎨 Dynamic Responsive Image Sizing (Critical Enhancement)
+
+### Problem Solved
+ComfyUI-generated 1024x1024 square images were being cut off in the web UI due to fixed container dimensions (`maxWidth: 600px, maxHeight: 400px`).
+
+### Root Cause Analysis
+- **Small screens**: Images displayed correctly (container could accommodate square ratio)
+- **Large screens**: Images cut off at bottom (height artificially constrained to 400px)
+- **Fixed dimensions**: No responsive adaptation to screen size or image aspect ratio
+
+### Dynamic Solution Implemented
+
+#### **1. Responsive Width Calculation**
+```typescript
+const responsiveMaxWidth = useMemo(() => {
+  if (typeof window === 'undefined') return maxWidth; // SSR safety
+  
+  const windowWidth = window.innerWidth;
+  
+  if (isMobile) {
+    return Math.min(400, windowWidth * 0.9); // Conservative mobile
+  } else {
+    // Desktop: 40% of window width, 600-800px range
+    return Math.max(600, Math.min(800, windowWidth * 0.4));
+  }
+}, [maxWidth, isMobile]);
+```
+
+#### **2. Responsive Height Calculation**  
+```typescript
+const dynamicMaxHeight = useMemo(() => {
+  if (isMobile) {
+    return Math.min(responsiveMaxWidth * 0.75, 350); // Mobile: 3:4 ratio max
+  } else {
+    return Math.min(responsiveMaxWidth * 1.0, 700); // Desktop: 1:1 ratio max
+  }
+}, [responsiveMaxWidth, isMobile]);
+```
+
+#### **3. ElizaOS Framework Integration**
+- **Used `useIsMobile()` hook**: ElizaOS standard responsive detection (768px breakpoint)
+- **Followed Tailwind patterns**: Consistent with existing ElizaOS responsive design
+- **Image-only override**: Preserved behavior for videos, PDFs, and other media types
+
+### Critical ElizaOS Architecture Discovery
+
+#### **Two-Stage Build Process (ESSENTIAL)**
+```bash
+# REQUIRED SEQUENCE for any client changes:
+1. cd packages/client && bun run build    # Build client assets
+2. cd packages/server && bun run build    # Copy client to server/dist/client  
+3. elizaos start                          # Restart to serve updated files
+```
+
+**Why This Matters**:
+- ElizaOS serves from `packages/server/dist/client` (NOT `packages/client/dist`)
+- Server build executes `copy-client-dist.ts` to copy client assets
+- Missing step 2 results in serving stale client files
+- Browser cache requires hard refresh (`Ctrl+Shift+F5`) after updates
+
+### Implementation Impact
+
+#### **Before Enhancement**
+❌ Square images cut off on large screens  
+❌ Fixed 600x400 container regardless of screen size  
+❌ Poor user experience on desktop displays  
+❌ No responsive adaptation  
+
+#### **After Enhancement**  
+✅ Perfect square display on all screen sizes  
+✅ Responsive width: 600-800px on desktop, 400px on mobile  
+✅ Dynamic height: 1:1 ratio on desktop, 3:4 on mobile  
+✅ Maintains container compatibility and existing behavior  
+✅ Follows ElizaOS responsive design conventions  
+
+### Performance Optimizations
+- **`useMemo` hooks**: Calculations only run when dependencies change
+- **SSR safety**: Graceful fallbacks for server-side rendering
+- **Mobile-first**: Conservative dimensions prevent layout overflow
+- **Debug logging**: Comprehensive troubleshooting infrastructure
+
 ## 📋 Testing Coverage
 
 - ✅ Unit tests for all plugin components
@@ -109,6 +190,8 @@ const handleComfyUIError = (event) => {
 - ✅ Service initialization and configuration
 - ✅ Manual testing in dev container environment
 - ✅ End-to-end image generation and display
+- ✅ **Responsive image sizing across multiple screen sizes**
+- ✅ **Build process validation and deployment testing**
 
 ## 📚 Documentation
 

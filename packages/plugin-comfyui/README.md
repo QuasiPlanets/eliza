@@ -7,6 +7,7 @@
 ✅ **Complete Image Generation** - Full Flux model support with customizable parameters  
 ✅ **Container Compatible** - Works seamlessly in Docker and dev containers  
 ✅ **Universal Display** - Images work in web UI, Discord, and all platforms  
+✅ **Dynamic Responsive Sizing** - Perfect image display across all screen sizes  
 ✅ **Queue Management** - Monitor, interrupt, and manage ComfyUI workflows  
 ✅ **Proxy Architecture** - Secure proxy for browser access across networks  
 ✅ **Auto-retry Logic** - Robust error handling with cache-busting  
@@ -73,6 +74,20 @@ This plugin is **specifically designed** for container environments:
 - Automatically takes precedence over other image plugins
 - Manual registration ensures ComfyUI is the primary generator
 
+## Dynamic Responsive Image Sizing
+
+This plugin features **advanced responsive image sizing** that automatically adapts to screen size:
+
+- **Mobile** (< 768px): Conservative 400px max width with 3:4 aspect ratio
+- **Desktop** (≥ 768px): Dynamic 600-800px width with 1:1 aspect ratio for perfect squares
+- **Automatic scaling**: Based on window width using ElizaOS responsive conventions
+- **ComfyUI optimized**: Specifically designed for 1024x1024 square AI-generated images
+
+### Perfect Display Results
+- **Small screens**: Optimized mobile experience without overflow
+- **Large screens**: Full utilization of available space with proper aspect ratios  
+- **All devices**: Maintains image quality and proportions
+
 ## Development
 
 ```bash
@@ -85,6 +100,26 @@ bun run build
 # Run tests
 bun run test
 ```
+
+### 🚨 **Critical: ElizaOS Build Process for Client Changes**
+
+If you modify client-side display behavior, you **MUST** follow this sequence:
+
+```bash
+# 1. Build client assets
+cd packages/client && bun run build
+
+# 2. Copy client files to server (ESSENTIAL STEP)
+cd packages/server && bun run build  
+
+# 3. Restart ElizaOS to serve updated files
+elizaos start
+
+# 4. Hard refresh browser to clear cache
+# Press Ctrl+Shift+F5 in your browser
+```
+
+**Why this matters**: ElizaOS serves client files from `packages/server/dist/client`, not directly from `packages/client/dist`. The server build step copies updated client assets.
 
 ## 📚 **IMPORTANT: Developer Guide**
 

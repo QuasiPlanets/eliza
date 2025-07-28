@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Play, Volume2, FileText, ExternalLink, AlertCircle, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MediaContentProps {
   url: string;
@@ -148,6 +149,9 @@ export default function MediaContent({
 
   // Direct Image
   if (isImageUrl(url)) {
+    // Mobile detection for responsive sizing
+    const isMobile = useIsMobile();
+
     // Special handling for ComfyUI images with retry mechanism
     const isComfyUIImage = url && url.includes('/api/media/comfyui/image');
     const [retryCount, setRetryCount] = useState(0);
@@ -179,10 +183,61 @@ export default function MediaContent({
       ? `${url}&cb=${Date.now()}`
       : url;
 
+    // Responsive maxWidth calculation specifically for images
+    const responsiveMaxWidth = useMemo(() => {
+      if (typeof window === 'undefined') return maxWidth; // SSR fallback
+
+      // Mobile: Conservative width
+      const mobileMaxWidth = Math.min(maxWidth, 400);
+
+      // Desktop: Scale with window width, but with reasonable limits
+      // Use 40% of window width, capped at 800px, minimum 600px
+      const desktopMaxWidth = Math.min(
+        Math.max(window.innerWidth * 0.4, 600),
+        800
+      );
+
+      return isMobile ? mobileMaxWidth : desktopMaxWidth;
+    }, [maxWidth, isMobile]);
+
+    // Dynamic height calculation for responsive image display
+    const dynamicMaxHeight = useMemo(() => {
+      // Debug logging to understand the issue
+      if (isComfyUIImage) {
+        console.log('ComfyUI Dynamic Height Debug:', {
+          isMobile,
+          originalMaxWidth: maxWidth,
+          responsiveMaxWidth,
+          windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'unknown'
+        });
+      }
+
+      // Mobile: More conservative to prevent chat overflow
+      const mobileMaxHeight = Math.min(responsiveMaxWidth * 0.75, 350);
+
+      // Desktop: Allow 1:1 ratio for square images
+      const desktopMaxHeight = Math.min(responsiveMaxWidth * 1.0, 700);
+
+      const baseHeight = isMobile ? mobileMaxHeight : desktopMaxHeight;
+      const finalHeight = Math.max(300, baseHeight);
+
+      if (isComfyUIImage) {
+        console.log('ComfyUI Dynamic Height Result:', {
+          mobileMaxHeight,
+          desktopMaxHeight,
+          baseHeight,
+          finalHeight,
+          aspectRatio: responsiveMaxWidth / finalHeight
+        });
+      }
+
+      return finalHeight;
+    }, [responsiveMaxWidth, isMobile, isComfyUIImage]);
+
     return (
       <div
         className={cn('relative rounded-lg overflow-hidden bg-muted', className)}
-        style={{ maxWidth, maxHeight }}
+        style={{ maxWidth: responsiveMaxWidth, maxHeight: dynamicMaxHeight }}
       >
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-muted">

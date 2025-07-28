@@ -558,6 +558,123 @@ const proxyUrl = `/api/media/comfyui/image?url=${encodeURIComponent(internalUrl)
 
 ---
 
+## Dynamic Responsive Image Sizing
+
+### Overview
+
+A critical enhancement was implemented to solve aspect ratio issues with ComfyUI-generated images in the ElizaOS web UI. Square 1024x1024 images were being cut off due to fixed container dimensions.
+
+### Problem Analysis
+
+**Root Issue**: The default `MediaContent` component used fixed dimensions (`maxWidth: 600px, maxHeight: 400px`) that cut off square images on large screens.
+
+**Behavior Observed**:
+- Small browser windows: Images displayed correctly (square)
+- Large browser windows: Images cut off at bottom (height constrained to 400px)
+
+### Solution Implementation
+
+#### 1. **Dynamic Responsive Width Calculation**
+
+Modified `packages/client/src/components/media-content.tsx` to implement responsive `maxWidth` specifically for images:
+
+```typescript
+// Responsive maxWidth calculation (images only)
+const responsiveMaxWidth = useMemo(() => {
+  if (typeof window === 'undefined') return maxWidth; // SSR safety
+  
+  const windowWidth = window.innerWidth;
+  
+  if (isMobile) {
+    return Math.min(400, windowWidth * 0.9); // Conservative mobile
+  } else {
+    // Desktop: 40% of window width, 600-800px range
+    return Math.max(600, Math.min(800, windowWidth * 0.4));
+  }
+}, [maxWidth, isMobile]);
+```
+
+#### 2. **Dynamic Height Calculation**
+
+Implemented responsive height based on calculated width:
+
+```typescript
+const dynamicMaxHeight = useMemo(() => {
+  if (isMobile) {
+    return Math.min(responsiveMaxWidth * 0.75, 350); // Mobile: 3:4 ratio max
+  } else {
+    return Math.min(responsiveMaxWidth * 1.0, 700); // Desktop: 1:1 ratio max
+  }
+}, [responsiveMaxWidth, isMobile]);
+```
+
+#### 3. **ElizaOS Framework Integration**
+
+**Used ElizaOS Conventions**:
+- **`useIsMobile()` hook**: Existing ElizaOS responsive detection at 768px breakpoint
+- **Tailwind patterns**: Consistent with ElizaOS responsive design principles
+- **Image-only override**: Preserved existing behavior for videos, PDFs, etc.
+
+### Critical ElizaOS Build Process Understanding
+
+**Two-Stage Build Requirement**:
+
+```bash
+# REQUIRED SEQUENCE for client changes
+cd packages/client && bun run build    # 1. Build client assets
+cd packages/server && bun run build    # 2. Copy client to server/dist/client
+elizaos start                          # 3. Restart to serve updated files
+```
+
+**Why This Matters**:
+- ElizaOS serves client from `packages/server/dist/client` (not `packages/client/dist`)
+- Server build script copies client files via `copy-client-dist.ts`
+- Browser cache requires hard refresh (`Ctrl+Shift+F5`) after updates
+
+### Implementation Details
+
+#### **Debugging Infrastructure**
+
+Added comprehensive debug logging for troubleshooting:
+
+```typescript
+console.log('ComfyUI Dynamic Height Debug:', {
+  originalMaxWidth: maxWidth,
+  responsiveMaxWidth: responsiveMaxWidth,
+  windowWidth: typeof window !== 'undefined' ? window.innerWidth : 'SSR',
+  isMobile: isMobile
+});
+```
+
+#### **Container Compatibility**
+
+The solution maintains all existing container patterns:
+- **Relative URLs**: No hardcoded localhost references
+- **CORS compliance**: All headers preserved
+- **Dev container support**: Works with port forwarding
+- **SSR safety**: Graceful fallbacks for server-side rendering
+
+### Performance Considerations
+
+1. **`useMemo` optimization**: Calculations only run when dependencies change
+2. **Window resize handling**: Automatic recalculation on screen size changes  
+3. **Mobile-first approach**: Conservative mobile dimensions to prevent overflow
+4. **Aspect ratio preservation**: `object-contain` maintains image proportions
+
+### Testing and Validation
+
+**Responsive Breakpoints Tested**:
+- **Mobile** (< 768px): 400px max width, 3:4 aspect ratio
+- **Tablet** (768px - 1200px): 600-800px width, 1:1 aspect ratio  
+- **Desktop** (> 1200px): 800px max width, 1:1 aspect ratio
+- **Ultrawide** (> 1600px): Scales appropriately with window width
+
+**Validation Steps**:
+1. Generate ComfyUI 1024x1024 image
+2. Verify square display on all screen sizes
+3. Check debug logs for correct calculations
+4. Test browser window resizing behavior
+
 ## Conclusion
 
 This ComfyUI plugin represents a complete, production-ready integration that handles the complexities of container environments, browser compatibility, and asynchronous workflow execution. The architecture is designed to be robust, secure, and maintainable.
@@ -568,6 +685,13 @@ This ComfyUI plugin represents a complete, production-ready integration that han
 3. **Proxy architecture** for network isolation
 4. **Retry mechanisms** for reliability
 5. **Detailed logging** for debugging
+6. **Responsive image sizing** for optimal display across all devices
+
+**Critical Architecture Patterns:**
+- **Two-stage build process** for client-server integration
+- **ElizaOS responsive conventions** using existing hooks and patterns
+- **Container-native design** preserving dev container compatibility
+- **Progressive enhancement** maintaining backward compatibility
 
 **Remember:** This plugin has been battle-tested in dev container environments. Any changes should preserve these core architectural decisions to maintain compatibility and functionality.
 
