@@ -37,6 +37,12 @@ const getSpotifyId = (url: string): { type: string; id: string } | null => {
 };
 
 const isImageUrl = (url: string): boolean => {
+  // Check for ComfyUI proxy URLs first
+  if (url.includes('/api/media/comfyui/image')) {
+    return true;
+  }
+
+  // Check for standard image file extensions
   return /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(url);
 };
 
@@ -66,7 +72,14 @@ export default function MediaContent({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  const handleLoad = () => setIsLoading(false);
+  const handleLoad = () => {
+    setIsLoading(false);
+
+    // Enhanced debugging for ComfyUI images
+    if (url && url.includes('/api/media/comfyui/image')) {
+      console.log('ComfyUI image loaded successfully:', { url });
+    }
+  };
   const handleError = () => {
     setIsLoading(false);
     setHasError(true);
@@ -135,6 +148,37 @@ export default function MediaContent({
 
   // Direct Image
   if (isImageUrl(url)) {
+    // Special handling for ComfyUI images with retry mechanism
+    const isComfyUIImage = url && url.includes('/api/media/comfyui/image');
+    const [retryCount, setRetryCount] = useState(0);
+
+    const handleComfyUIError = (event?: React.SyntheticEvent<HTMLImageElement, Event>) => {
+      // Enhanced debugging for ComfyUI images
+      console.error('ComfyUI image failed to load (attempt ' + (retryCount + 1) + '):', {
+        url,
+        naturalWidth: (event?.target as HTMLImageElement)?.naturalWidth,
+        naturalHeight: (event?.target as HTMLImageElement)?.naturalHeight,
+        complete: (event?.target as HTMLImageElement)?.complete,
+        error: event
+      });
+
+      // Retry once with cache-busting timestamp
+      if (retryCount === 0) {
+        setRetryCount(1);
+        setHasError(false);
+        setIsLoading(true);
+        return;
+      }
+
+      setIsLoading(false);
+      setHasError(true);
+    };
+
+    // Add cache-busting parameter for ComfyUI images on retry
+    const imageUrl = isComfyUIImage && retryCount > 0
+      ? `${url}&cb=${Date.now()}`
+      : url;
+
     return (
       <div
         className={cn('relative rounded-lg overflow-hidden bg-muted', className)}
@@ -148,17 +192,18 @@ export default function MediaContent({
         {hasError ? (
           <div className="flex items-center justify-center p-4 text-muted-foreground">
             <AlertCircle className="w-6 h-6 mr-2" />
-            <span>Failed to load image</span>
+            <span>Failed to load image{isComfyUIImage ? ' (ComfyUI)' : ''}</span>
           </div>
         ) : (
           <img
-            src={url || '/placeholder.svg'}
+            src={imageUrl || '/placeholder.svg'}
             alt={title || 'Image'}
             width={maxWidth}
             height={maxHeight}
             className="w-full h-auto object-contain"
             onLoad={handleLoad}
-            onError={handleError}
+            onError={isComfyUIImage ? handleComfyUIError : handleError}
+            crossOrigin="anonymous"
           />
         )}
       </div>

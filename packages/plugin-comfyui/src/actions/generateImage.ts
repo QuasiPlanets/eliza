@@ -19,10 +19,12 @@ export const generateImageAction: Action = {
 
         // Check for image generation keywords
         const imageKeywords = [
-            'generate image', 'create image', 'draw image', 'make image',
-            'generate picture', 'create picture', 'draw picture', 'make picture',
-            'generate art', 'create art', 'draw art', 'make art',
-            'make an image', 'draw a picture'
+            'generate image', 'generate an image', 'create image', 'create an image',
+            'draw image', 'draw an image', 'make image', 'make an image',
+            'generate picture', 'generate a picture', 'create picture', 'create a picture',
+            'draw picture', 'draw a picture', 'make picture', 'make a picture',
+            'generate art', 'generate some art', 'create art', 'create some art',
+            'draw art', 'draw some art', 'make art', 'make some art'
         ];
 
         const hasImageKeyword = imageKeywords.some(keyword => text.includes(keyword));
@@ -109,9 +111,7 @@ export const generateImageAction: Action = {
             // Generate the image with enhanced result
             const result = await comfyuiService.generateImage(prompt, params);
 
-            console.log(`[ComfyUI Action] Image generated. Original URL: ${result.url}`);
-            console.log(`[ComfyUI Action] Base64 available: ${result.base64 ? 'YES' : 'NO'}`);
-            console.log(`[ComfyUI Action] Using URL: ${result.base64 || result.url}`);
+            console.log(`[ComfyUI Action] Image generated and accessible via proxy: ${result.url}`);
 
             // Send the response with the generated image
             if (callback) {
@@ -119,7 +119,7 @@ export const generateImageAction: Action = {
                     text: `I've generated an image based on your prompt: "${prompt}". ${params.width && params.height ? `Dimensions: ${params.width}x${params.height}.` : ''}`,
                     attachments: [{
                         id: v4(),
-                        url: result.base64 || result.url, // Use base64 for universal access, fallback to original URL
+                        url: result.url, // Use proxy URL for universal access
                         title: `Generated Image: ${prompt.substring(0, 50)}...`,
                         contentType: ContentType.IMAGE,
                         description: prompt

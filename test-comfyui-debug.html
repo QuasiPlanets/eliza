@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI Debug Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+
+        .info {
+            color: blue;
+        }
+
+        img {
+            max-width: 300px;
+            border: 2px solid #333;
+            margin: 10px 0;
+        }
+
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        #console {
+            background: #f0f0f0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>ComfyUI Browser Debug Tool</h1>
+
+    <div class="test-section">
+        <h2>🔧 Current Test URL</h2>
+        <input type="text" id="testUrl"
+            value="http://localhost:3000/api/media/comfyui/image?url=http%3A%2F%2F172.19.0.4%3A8188%2Fview%3Ffilename%3DElizaOS_00044_.png%26subfolder%3D%26type%3Doutput"
+            style="width: 100%; padding: 5px;">
+        <button onclick="updateTests()">Update Tests</button>
+    </div>
+
+    <div class="test-section">
+        <h2>🌐 1. Direct Image Loading Test</h2>
+        <p>This tests if the browser can load the ComfyUI proxy image directly:</p>
+        <img id="directImage" alt="ComfyUI Test Image" onload="logSuccess('Direct image loaded successfully!')"
+            onerror="logError('Direct image failed to load!')">
+        <div id="imageStatus">Waiting for test...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>📡 2. Fetch API Test</h2>
+        <p>This tests the HTTP request to the ComfyUI proxy:</p>
+        <button onclick="testFetch()">Test Fetch API</button>
+        <div id="fetchStatus">Click button to test</div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 3. URL Detection Test</h2>
+        <p>This tests our ComfyUI URL detection logic:</p>
+        <button onclick="testUrlDetection()">Test URL Detection</button>
+        <div id="urlDetectionStatus">Click button to test</div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 4. CORS Headers Test</h2>
+        <p>This checks if CORS headers are properly set:</p>
+        <button onclick="testCorsHeaders()">Test CORS Headers</button>
+        <div id="corsStatus">Click button to test</div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧹 5. Browser Cache Test</h2>
+        <p>Test with cache-busting parameters:</p>
+        <button onclick="testCacheBusting()">Test Cache-Busting</button>
+        <div id="cacheStatus">Click button to test</div>
+        <img id="cacheBustImage" alt="Cache-bust test" style="display: none;"
+            onload="logSuccess('Cache-bust image loaded!')" onerror="logError('Cache-bust image failed!')">
+    </div>
+
+    <div class="test-section">
+        <h2>📋 Console Output</h2>
+        <div id="console"></div>
+        <button onclick="clearConsole()">Clear Console</button>
+    </div>
+
+    <script>
+        let currentUrl = document.getElementById('testUrl').value;
+
+        function log(message, type = 'info') {
+            const console = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            console.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function logSuccess(message) {
+            log(message, 'success');
+        }
+
+        function logError(message) {
+            log(message, 'error');
+        }
+
+        function clearConsole() {
+            document.getElementById('console').innerHTML = '';
+        }
+
+        function updateTests() {
+            currentUrl = document.getElementById('testUrl').value;
+            log(`Updated test URL to: ${currentUrl}`);
+
+            // Update direct image test
+            const directImage = document.getElementById('directImage');
+            directImage.src = currentUrl;
+            document.getElementById('imageStatus').innerHTML = '<span class="info">Loading...</span>';
+        }
+
+        function testFetch() {
+            log('Starting Fetch API test...');
+            document.getElementById('fetchStatus').innerHTML = '<span class="info">Testing...</span>';
+
+            fetch(currentUrl, {
+                method: 'GET',
+                mode: 'cors',
+            })
+                .then(response => {
+                    log(`Fetch response status: ${response.status}`);
+                    log(`Fetch response headers: ${JSON.stringify([...response.headers.entries()])}`);
+                    log(`Content-Type: ${response.headers.get('content-type')}`);
+                    log(`CORS headers: Access-Control-Allow-Origin=${response.headers.get('access-control-allow-origin')}`);
+
+                    if (response.ok) {
+                        document.getElementById('fetchStatus').innerHTML = '<span class="success">✅ Fetch successful!</span>';
+                        return response.blob();
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                })
+                .then(blob => {
+                    log(`Received blob of size: ${blob.size} bytes, type: ${blob.type}`);
+                    logSuccess('Fetch API test completed successfully!');
+                })
+                .catch(error => {
+                    logError(`Fetch API test failed: ${error.message}`);
+                    document.getElementById('fetchStatus').innerHTML = `<span class="error">❌ Fetch failed: ${error.message}</span>`;
+                });
+        }
+
+        function testUrlDetection() {
+            log('Testing URL detection logic...');
+
+            // Simulate our MediaContent URL detection logic
+            function isImageUrl(url) {
+                // Check for ComfyUI proxy URLs first
+                if (url.includes('/api/media/comfyui/image')) {
+                    return true;
+                }
+
+                // Check for standard image file extensions
+                return /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(url);
+            }
+
+            const testUrls = [
+                currentUrl,
+                'http://example.com/image.png',
+                'http://example.com/image.jpg?param=1',
+                'http://example.com/not-an-image.txt'
+            ];
+
+            testUrls.forEach(url => {
+                const result = isImageUrl(url);
+                log(`URL: ${url.substring(0, 60)}... -> ${result ? 'DETECTED as image' : 'NOT detected as image'}`);
+            });
+
+            const ourResult = isImageUrl(currentUrl);
+            if (ourResult) {
+                document.getElementById('urlDetectionStatus').innerHTML = '<span class="success">✅ URL correctly detected as image</span>';
+                logSuccess('URL detection test passed!');
+            } else {
+                document.getElementById('urlDetectionStatus').innerHTML = '<span class="error">❌ URL not detected as image</span>';
+                logError('URL detection test failed!');
+            }
+        }
+
+        function testCorsHeaders() {
+            log('Testing CORS headers...');
+            document.getElementById('corsStatus').innerHTML = '<span class="info">Testing...</span>';
+
+            fetch(currentUrl, {
+                method: 'HEAD',
+                mode: 'cors',
+            })
+                .then(response => {
+                    const corsOrigin = response.headers.get('access-control-allow-origin');
+                    const corsMethods = response.headers.get('access-control-allow-methods');
+                    const corsHeaders = response.headers.get('access-control-allow-headers');
+
+                    log(`CORS Origin: ${corsOrigin}`);
+                    log(`CORS Methods: ${corsMethods}`);
+                    log(`CORS Headers: ${corsHeaders}`);
+
+                    if (corsOrigin === '*' || corsOrigin === window.location.origin) {
+                        document.getElementById('corsStatus').innerHTML = '<span class="success">✅ CORS headers are correct</span>';
+                        logSuccess('CORS test passed!');
+                    } else {
+                        document.getElementById('corsStatus').innerHTML = '<span class="error">❌ CORS headers missing or incorrect</span>';
+                        logError('CORS test failed!');
+                    }
+                })
+                .catch(error => {
+                    logError(`CORS test failed: ${error.message}`);
+                    document.getElementById('corsStatus').innerHTML = `<span class="error">❌ CORS test failed: ${error.message}</span>`;
+                });
+        }
+
+        function testCacheBusting() {
+            log('Testing with cache-busting parameters...');
+            document.getElementById('cacheStatus').innerHTML = '<span class="info">Testing...</span>';
+
+            const cacheBustUrl = currentUrl + (currentUrl.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+            log(`Cache-bust URL: ${cacheBustUrl}`);
+
+            const img = document.getElementById('cacheBustImage');
+            img.style.display = 'block';
+            img.src = cacheBustUrl;
+
+            document.getElementById('cacheStatus').innerHTML = '<span class="info">Loading cache-bust image...</span>';
+        }
+
+        // Initialize tests
+        updateTests();
+        log('ComfyUI Debug Tool initialized');
+        log('🔍 Testing URL: ' + currentUrl);
+    </script>
+</body>
+
+</html>

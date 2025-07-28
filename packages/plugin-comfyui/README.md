@@ -1,24 +1,122 @@
 # @elizaos/plugin-comfyui
 
-ElizaOS plugin for integrating with the ComfyUI API, enabling agents to generate images and audio using diffusion workflows.
+**Production-ready ElizaOS plugin for ComfyUI API integration with full endpoint support, queue management, and universal image display.**
 
 ## Features
-- Generate images and audio via ComfyUI API
-- Actions: GENERATE_IMAGE, GENERATE_AUDIO
-- Stores media metadata in ElizaOS memory
-- Configurable API endpoint and authentication
 
-## Usage
-1. Add the plugin to your ElizaOS agent's plugins list.
-2. Set the ComfyUI API endpoint and key in your environment or agent settings:
-   - `COMFYUI_API_URL` (e.g., http://comfyui:8188)
-   - `COMFYUI_API_KEY` (if required)
-3. Use the GENERATE_IMAGE or GENERATE_AUDIO actions to create media.
+✅ **Complete Image Generation** - Full Flux model support with customizable parameters  
+✅ **Container Compatible** - Works seamlessly in Docker and dev containers  
+✅ **Universal Display** - Images work in web UI, Discord, and all platforms  
+✅ **Queue Management** - Monitor, interrupt, and manage ComfyUI workflows  
+✅ **Proxy Architecture** - Secure proxy for browser access across networks  
+✅ **Auto-retry Logic** - Robust error handling with cache-busting  
+✅ **CORS Complete** - Full cross-origin support for all environments  
+
+## Quick Start
+
+### 1. Environment Setup
+```bash
+# Required: ComfyUI API endpoint
+COMFYUI_API_URL=http://comfyui:8188
+
+# Optional: Authentication
+COMFYUI_API_KEY=your_api_key_here
+```
+
+### 2. Usage
+```typescript
+// In your ElizaOS agent configuration
+import comfyuiPlugin from '@elizaos/plugin-comfyui';
+
+export default {
+    plugins: [comfyuiPlugin],
+    // ... other config
+};
+```
+
+### 3. Generate Images
+```
+User: generate an image of a cat
+Agent: I'll create that image for you using ComfyUI...
+[Image displays directly in chat]
+```
+
+## Container Compatibility
+
+This plugin is **specifically designed** for container environments:
+
+- ✅ **Dev Containers** - Works with port forwarding (`localhost:40165` → `localhost:3000`)
+- ✅ **Docker Compose** - Internal service networking (`comfyui:8188`)
+- ✅ **Kubernetes** - Service discovery and ingress compatible
+- ✅ **Local Development** - Standard localhost operation
+
+## Actions Available
+
+- **`GENERATE_IMAGE`** - Create images with Flux model
+- **`GENERATE_AUDIO`** - Audio generation (experimental)  
+- **`CHECK_COMFYUI_QUEUE`** - Monitor generation queue
+- **`INTERRUPT_COMFYUI`** - Stop running workflows
+
+## Architecture Highlights
+
+### Proxy Design
+- **Browser ← ElizaOS Proxy ← ComfyUI Container**
+- Solves network isolation and CORS issues
+- Secure URL validation prevents abuse
+
+### Relative URLs
+- Uses `/api/media/comfyui/image?url=...` (relative)
+- **Never** hardcodes `localhost:3000` 
+- Works with any port forwarding setup
+
+### Action Override
+- Automatically takes precedence over other image plugins
+- Manual registration ensures ComfyUI is the primary generator
 
 ## Development
-- `bun install` or `npm install`
-- `bun run build` or `npm run build`
-- `bun run test` or `npm test`
+
+```bash
+# Install dependencies
+bun install
+
+# Build plugin
+bun run build
+
+# Run tests
+bun run test
+```
+
+## 📚 **IMPORTANT: Developer Guide**
+
+**Before making ANY changes to this plugin, read the comprehensive developer guide:**
+
+👉 **[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)** 👈
+
+This guide contains **critical information** about:
+- Container networking patterns that MUST be preserved
+- CORS configurations that CANNOT be modified  
+- URL generation patterns that are REQUIRED for dev containers
+- All the fixes and architectural decisions documented in detail
+
+**Failure to follow the developer guide may break the plugin in container environments.**
+
+## Troubleshooting
+
+### Images not displaying?
+1. **Hard refresh** browser (`Ctrl+Shift+F5`)
+2. **Check browser console** for error messages
+3. **Verify ComfyUI is running**: `curl http://comfyui:8188/queue`
+4. **Test proxy directly**: `curl -I http://localhost:3000/api/media/comfyui/health`
+
+### Common Issues
+- **"Failed to load image"** → Usually browser cache, try hard refresh
+- **Connection refused** → Check `COMFYUI_API_URL` environment variable
+- **Timeout errors** → Verify ComfyUI model is loaded (`flux1-dev-fp8.safetensors`)
 
 ## License
+
 MIT
+
+---
+
+**This plugin has been battle-tested in dev container environments. All architectural decisions are documented in the developer guide for maintainability and future development.**

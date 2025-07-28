@@ -1,6 +1,7 @@
 import express from 'express';
 import { createAgentMediaRouter } from './agents';
 import { createChannelMediaRouter } from './channels';
+import { createComfyUIMediaRouter } from './comfyui';
 
 /**
  * Creates the media router for file uploads and media handling
@@ -13,6 +14,9 @@ export function mediaRouter(): express.Router {
 
   // Mount channel media uploads under /channels
   router.use('/channels', createChannelMediaRouter());
+
+  // Mount ComfyUI media proxy under /comfyui
+  router.use('/comfyui', createComfyUIMediaRouter());
 
   return router;
 }

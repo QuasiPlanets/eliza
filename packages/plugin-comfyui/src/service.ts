@@ -105,34 +105,7 @@ export class ComfyUIService extends Service {
         }
     }
 
-    /**
-     * Fetch image from ComfyUI and convert to base64 for universal access
-     */
-    private async fetchImageAsBase64(imageUrl: string): Promise<string> {
-        try {
-            console.log(`[ComfyUI] Fetching image from: ${imageUrl}`);
 
-            // Convert localhost URL back to internal URL for fetching
-            const internalUrl = this.convertToInternalUrl(imageUrl);
-            console.log(`[ComfyUI] Using internal URL for fetch: ${internalUrl}`);
-
-            const response = await axios.get(internalUrl, {
-                responseType: 'arraybuffer',
-                headers: this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {},
-                timeout: 30000
-            });
-
-            const buffer = Buffer.from(response.data);
-            const base64 = buffer.toString('base64');
-            const mimeType = response.headers['content-type'] || 'image/png';
-
-            console.log(`[ComfyUI] Successfully converted image to base64 (${base64.length} chars)`);
-            return `data:${mimeType};base64,${base64}`;
-        } catch (error: any) {
-            console.error('Failed to fetch image:', error);
-            throw new Error(`Failed to fetch image: ${error.message}`);
-        }
-    }
 
     /**
      * Generate image with enhanced response handling
@@ -159,15 +132,12 @@ export class ComfyUIService extends Service {
             // Wait for the image to be generated
             const imageInfo = await this.waitForImage(promptId);
 
-            // Fetch the image and convert to base64 for universal access
-            console.log(`[ComfyUI] Fetching image from: ${imageInfo.url}`);
-            const base64Image = await this.fetchImageAsBase64(imageInfo.url);
-            console.log(`[ComfyUI] Base64 conversion successful: ${base64Image.substring(0, 50)}...`);
+            console.log(`[ComfyUI] Image generated and available via proxy: ${imageInfo.url}`);
 
-            // Create Media object for ElizaOS
+            // Create Media object for ElizaOS using the proxy URL
             const media: Media = {
                 id: `comfyui-${promptId}-${Date.now()}`,
-                url: base64Image, // Use base64 data URL for universal access
+                url: imageInfo.url, // Use proxy URL for universal access
                 title: `Generated image: ${prompt.substring(0, 50)}...`,
                 source: 'comfyui',
                 contentType: ContentType.IMAGE,
@@ -175,14 +145,12 @@ export class ComfyUIService extends Service {
             };
 
             return {
-                url: imageInfo.url, // Original ComfyUI URL
-                base64: base64Image, // Base64 for universal access
+                url: imageInfo.url, // Proxy URL for web UI access
                 filename: imageInfo.filename,
                 metadata: {
                     promptId,
                     prompt,
                     params,
-                    comfyui_url: imageInfo.url,
                     generated_at: new Date().toISOString()
                 },
                 media: media
@@ -291,15 +259,17 @@ export class ComfyUIService extends Service {
                     if (nodeOutput && nodeOutput.images && nodeOutput.images.length > 0) {
                         const image = nodeOutput.images[0];
 
-                        // Convert internal Docker URLs to localhost for universal access
+                        // Create internal URL for fetching image data
                         const internalImageUrl = `${this.apiUrl}/view?filename=${image.filename}&subfolder=${image.subfolder}&type=${image.type}`;
-                        const localhostImageUrl = this.convertToLocalhostUrl(internalImageUrl);
+
+                        // Create proxy URL that the web UI can access
+                        const proxyImageUrl = this.createProxyUrl(internalImageUrl);
 
                         console.log(`[ComfyUI] Internal URL: ${internalImageUrl}`);
-                        console.log(`[ComfyUI] Localhost URL: ${localhostImageUrl}`);
+                        console.log(`[ComfyUI] Proxy URL: ${proxyImageUrl}`);
 
                         return {
-                            url: localhostImageUrl,
+                            url: proxyImageUrl,
                             filename: image.filename
                         };
                     }
@@ -325,21 +295,16 @@ export class ComfyUIService extends Service {
     }
 
     /**
-     * Convert internal Docker URLs to localhost for universal access
+     * Create a proxy URL that routes through the ElizaOS server
+     * This allows the web UI to access ComfyUI images via the proxy endpoint
      */
-    private convertToLocalhostUrl(url: string): string {
-        // Replace internal Docker IP addresses with localhost
-        // This handles cases like 172.19.0.4:8188 -> 127.0.0.1:8188
-        return url.replace(/https?:\/\/172\.\d+\.\d+\.\d+:\d+/, 'http://127.0.0.1:8188');
-    }
+    private createProxyUrl(internalUrl: string): string {
+        // Encode the internal ComfyUI URL as a query parameter
+        const encodedUrl = encodeURIComponent(internalUrl);
 
-    /**
-     * Convert localhost URLs back to internal Docker URLs for fetching
-     */
-    private convertToInternalUrl(url: string): string {
-        // Convert localhost URLs back to internal Docker URLs for fetching
-        // This handles cases like 127.0.0.1:8188 -> 172.19.0.4:8188
-        return url.replace(/https?:\/\/127\.0\.0\.1:8188/, this.apiUrl);
+        // Use relative URL to work with dev containers, port forwarding, and any proxy setup
+        // This will automatically use the same host:port that the browser is using to access the UI
+        return `/api/media/comfyui/image?url=${encodedUrl}`;
     }
 
     /**

@@ -7,16 +7,11 @@ describe('ComfyUI Plugin', () => {
         expect(comfyuiPlugin.name).toBe('@elizaos/plugin-comfyui');
         expect(comfyuiPlugin.description).toBe('Enhanced ElizaOS plugin for ComfyUI API integration with full endpoint support, queue management, and universal image display');
         expect(comfyuiPlugin.actions).toBeDefined();
-        expect(comfyuiPlugin.actions).toHaveLength(4);
+        expect(comfyuiPlugin.actions).toHaveLength(3); // 3 actions in array, GENERATE_IMAGE is manually registered
     });
 
-    it('should have generate image action', () => {
-        const imageAction = comfyuiPlugin.actions?.find(action => action.name === 'GENERATE_IMAGE');
-        expect(imageAction).toBeDefined();
-        expect(imageAction?.description).toBe('Generates an image using ComfyUI based on a text prompt with enhanced parameters support');
-        expect(imageAction?.validate).toBeDefined();
-        expect(imageAction?.handler).toBeDefined();
-    });
+    // Note: GENERATE_IMAGE action is manually registered in init() to override other plugins
+    // so it's not included in the static actions array
 
     it('should have generate audio action', () => {
         const audioAction = comfyuiPlugin.actions?.find(action => action.name === 'GENERATE_AUDIO');
