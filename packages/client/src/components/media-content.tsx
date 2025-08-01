@@ -52,6 +52,12 @@ const isVideoUrl = (url: string): boolean => {
 };
 
 const isAudioUrl = (url: string): boolean => {
+  // Check for ComfyUI audio proxy URLs first
+  if (url.includes('/api/media/comfyui/audio')) {
+    return true;
+  }
+
+  // Check for standard audio file extensions
   return /\.(mp3|wav|ogg|aac|flac|m4a|wma)(\?.*)?$/i.test(url);
 };
 
@@ -296,6 +302,38 @@ export default function MediaContent({
 
   // Direct Audio
   if (isAudioUrl(url)) {
+    // Special handling for ComfyUI audio with retry mechanism
+    const isComfyUIAudio = url && url.includes('/api/media/comfyui/audio');
+    const [audioRetryCount, setAudioRetryCount] = useState(0);
+
+    const handleComfyUIAudioError = (event?: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+      // Enhanced debugging for ComfyUI audio
+      console.error('ComfyUI audio failed to load (attempt ' + (audioRetryCount + 1) + '):', {
+        url,
+        readyState: (event?.target as HTMLAudioElement)?.readyState,
+        networkState: (event?.target as HTMLAudioElement)?.networkState,
+        error: event
+      });
+
+      // Retry once with cache-busting timestamp
+      if (audioRetryCount === 0) {
+        setAudioRetryCount(1);
+        setHasError(false);
+        setIsLoading(true);
+        return;
+      }
+
+      setIsLoading(false);
+      setHasError(true);
+    };
+
+    // Add cache-busting parameter for ComfyUI audio on retry
+    const audioUrl = isComfyUIAudio && audioRetryCount > 0
+      ? `${url}&cb=${Date.now()}`
+      : url;
+
+    const audioErrorHandler = isComfyUIAudio ? handleComfyUIAudioError : handleError;
+
     return (
       <div className={cn('relative rounded-lg bg-card border p-4', className)} style={{ maxWidth }}>
         <div className="flex items-center space-x-3 mb-3 overflow-hidden">
@@ -307,18 +345,23 @@ export default function MediaContent({
         {hasError ? (
           <div className="flex items-center text-muted-foreground">
             <AlertCircle className="w-4 h-4 mr-2" />
-            <span className="text-sm">Failed to load audio</span>
+            <span className="text-sm">Failed to load audio{isComfyUIAudio ? ' (ComfyUI)' : ''}</span>
           </div>
         ) : (
           <audio
             controls
             className="w-full"
             preload="metadata"
-            onLoadedData={handleLoad}
-            onError={handleError}
+            src={audioUrl}
+            onLoadedData={() => {
+              handleLoad();
+              if (isComfyUIAudio) {
+                console.log('ComfyUI audio loaded successfully:', { url: audioUrl });
+              }
+            }}
+            onError={audioErrorHandler}
             crossOrigin="anonymous"
           >
-            <source src={url} />
             Your browser does not support the audio tag.
           </audio>
         )}

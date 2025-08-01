@@ -183,6 +183,85 @@ const dynamicMaxHeight = useMemo(() => {
 - **Mobile-first**: Conservative dimensions prevent layout overflow
 - **Debug logging**: Comprehensive troubleshooting infrastructure
 
+## 🎵 Audio Generation Implementation (Fully Operational)
+
+### Problem Solved
+Extended ComfyUI plugin to support audio generation using Stable Audio models alongside existing image generation capabilities.
+
+### Implementation Details
+
+#### **1. Audio Workflow Integration**
+```typescript
+// createAudioWorkflow method using Stable Audio workflow
+private createAudioWorkflow(prompt: string, params: Record<string, any> = {}): any {
+    const seed = params.seed || Math.floor(Math.random() * 1000000);
+    const steps = params.steps || 50;
+    const cfg = params.cfg || 4.98;
+    const seconds = params.seconds || 47.6;
+    const model = params.model || "stable-audio-open-1.0.safetensors";
+    
+    // Returns complete ComfyUI Stable Audio workflow JSON
+}
+```
+
+#### **2. Audio Service Method**
+```typescript
+async generateAudio(prompt: string, params: Record<string, any> = {}): Promise<{ url: string; metadata: any }> {
+    // 1. Create audio workflow
+    // 2. Submit to ComfyUI API  
+    // 3. Wait for audio generation completion
+    // 4. Return proxy URL for universal access
+}
+```
+
+#### **3. Audio Proxy Endpoint**
+Added `/api/media/comfyui/audio` endpoint to server:
+- **Longer timeout**: 60 seconds for larger audio files
+- **Range request support**: For audio seeking/streaming
+- **Proper content types**: `audio/wav` and other formats
+- **Same security validation**: URL format verification
+
+#### **4. Enhanced Action Implementation**
+- **Callback pattern**: Modern async response handling
+- **Audio attachments**: Proper `ContentType.AUDIO` integration
+- **Parameter support**: Duration, model selection, sampling parameters
+- **Progress updates**: Real-time status messaging
+
+### Audio Generation Features
+
+#### **Supported Parameters**
+- **Duration**: Configurable audio length (default 47.6 seconds)
+- **Model**: `stable-audio-open-1.0.safetensors` (default)
+- **Quality**: Steps, CFG, sampler settings
+- **Prompts**: Positive and negative text prompts
+
+#### **Workflow Compatibility**
+- **SaveAudio node**: Node 13 for output detection
+- **Stable Audio format**: Complete workflow integration
+- **Universal access**: Browser, Discord, all platforms supported
+
+### Implementation Architecture
+
+```mermaid
+graph TD
+    A[User Audio Request] --> B[generateAudio Action];
+    B --> C[ComfyUI Service];
+    C --> D[createAudioWorkflow];
+    D --> E[Submit to ComfyUI API];
+    E --> F[waitForAudio polling];
+    F --> G[SaveAudio node detection];
+    G --> H[Audio proxy URL creation];
+    H --> I[Response with audio attachment];
+    I --> J[Browser audio playback];
+```
+
+### Critical Success Factors
+1. **Node 13 Detection**: Properly monitors SaveAudio output node
+2. **Audio Proxy**: Separate endpoint for audio-specific handling
+3. **Content Type**: Correct `ContentType.AUDIO` for attachments  
+4. **Timeout Management**: Extended timeouts for audio processing
+5. **Universal Compatibility**: Works across all ElizaOS platforms
+
 ## 📋 Testing Coverage
 
 - ✅ Unit tests for all plugin components
@@ -190,6 +269,8 @@ const dynamicMaxHeight = useMemo(() => {
 - ✅ Service initialization and configuration
 - ✅ Manual testing in dev container environment
 - ✅ End-to-end image generation and display
+- ✅ **End-to-end audio generation and playback**
+- ✅ **Audio proxy endpoint validation**
 - ✅ **Responsive image sizing across multiple screen sizes**
 - ✅ **Build process validation and deployment testing**
 

@@ -1,157 +1,162 @@
-# @elizaos/plugin-comfyui
+# ComfyUI Plugin for ElizaOS
 
-**Production-ready ElizaOS plugin for ComfyUI API integration with full endpoint support, queue management, and universal image display.**
+Enhanced ElizaOS plugin for ComfyUI API integration with full endpoint support, queue management, and universal image display.
 
 ## Features
 
-✅ **Complete Image Generation** - Full Flux model support with customizable parameters  
-✅ **Container Compatible** - Works seamlessly in Docker and dev containers  
-✅ **Universal Display** - Images work in web UI, Discord, and all platforms  
-✅ **Dynamic Responsive Sizing** - Perfect image display across all screen sizes  
-✅ **Queue Management** - Monitor, interrupt, and manage ComfyUI workflows  
-✅ **Proxy Architecture** - Secure proxy for browser access across networks  
-✅ **Auto-retry Logic** - Robust error handling with cache-busting  
-✅ **CORS Complete** - Full cross-origin support for all environments  
+- **Image Generation**: Generate images using ComfyUI workflows
+- **Audio Generation**: Generate music and sound effects using Stable Audio
+- **Text-to-Speech**: Convert text to speech using XTTS voice cloning workflows
+- **Queue Management**: Monitor and control ComfyUI queue
+- **Universal Display**: Works across all ElizaOS clients (web UI, Discord, etc.)
 
-## Quick Start
+## Installation
 
-### 1. Environment Setup
+1. Install the plugin:
 ```bash
-# Required: ComfyUI API endpoint
-COMFYUI_API_URL=http://comfyui:8188
-
-# Optional: Authentication
-COMFYUI_API_KEY=your_api_key_here
+npm install @elizaos/plugin-comfyui
 ```
 
-### 2. Usage
-```typescript
-// In your ElizaOS agent configuration
-import comfyuiPlugin from '@elizaos/plugin-comfyui';
-
-export default {
-    plugins: [comfyuiPlugin],
-    // ... other config
-};
+2. Add to your agent's plugins:
+```json
+{
+  "plugins": ["@elizaos/plugin-comfyui"]
+}
 ```
 
-### 3. Generate Images
+3. Configure environment variables:
+```bash
+COMFYUI_API_URL=http://localhost:8188
+COMFYUI_API_KEY=your_api_key_optional
 ```
-User: generate an image of a cat
-Agent: I'll create that image for you using ComfyUI...
-[Image displays directly in chat]
+
+## Usage
+
+### Image Generation
+```
+"Generate an image of a beautiful sunset over the ocean"
 ```
 
-## Container Compatibility
+### Audio Generation
+```
+"Generate audio of ocean waves"
+"Create music for a peaceful meditation"
+```
 
-This plugin is **specifically designed** for container environments:
+### Text-to-Speech (XTTS Voice Cloning)
+```
+"Speak this text aloud: Hello, how are you today?"
+"Read aloud: Welcome to ElizaOS!"
+"Convert to speech: The quick brown fox jumps over the lazy dog."
+"Speak with voice file custom.wav: This is a custom voice."
+"Read aloud with speed 1.5: This will be faster speech."
+"Speak with language es: Hola, ¿cómo estás?"
+```
 
-- ✅ **Dev Containers** - Works with port forwarding (`localhost:40165` → `localhost:3000`)
-- ✅ **Docker Compose** - Internal service networking (`comfyui:8188`)
-- ✅ **Kubernetes** - Service discovery and ingress compatible
-- ✅ **Local Development** - Standard localhost operation
+### XTTS Parameters
 
-## Actions Available
+The XTTS voice cloning supports the following parameters:
 
-- **`GENERATE_IMAGE`** - Create images with Flux model
-- **`GENERATE_AUDIO`** - Audio generation (experimental)  
-- **`CHECK_COMFYUI_QUEUE`** - Monitor generation queue
-- **`INTERRUPT_COMFYUI`** - Stop running workflows
+- **Reference Audio**: `voice file filename.wav` - Voice to clone from
+- **Language**: `language en/es/fr/de/it/pt/ru/ja/ko/zh` - Speech language
+- **Speed**: `speed 1.2` - Speech speed multiplier (0.5-2.0)
+- **Temperature**: `temperature 0.7` - Generation randomness (0.0-1.0)
 
-## Architecture Highlights
+## Web UI TTS Toggle
 
-### Proxy Design
-- **Browser ← ElizaOS Proxy ← ComfyUI Container**
-- Solves network isolation and CORS issues
-- Secure URL validation prevents abuse
+The web UI includes a TTS toggle button in the chat header that allows users to:
 
-### Relative URLs
-- Uses `/api/media/comfyui/image?url=...` (relative)
-- **Never** hardcodes `localhost:3000` 
-- Works with any port forwarding setup
+- **Enable TTS**: Shows TTS buttons on agent messages
+- **Disable TTS**: Hides TTS buttons (default behavior)
+- **Persistent Setting**: Toggle state is saved in localStorage
 
-### Action Override
-- Automatically takes precedence over other image plugins
-- Manual registration ensures ComfyUI is the primary generator
+### TTS Toggle Location
+The toggle appears in the chat header next to other controls:
+- **Icon**: Volume2 (enabled) / VolumeX (disabled)
+- **Switch**: Small toggle switch
+- **Tooltip**: "Enable/Disable text-to-speech"
 
-## Dynamic Responsive Image Sizing
+## Configuration
 
-This plugin features **advanced responsive image sizing** that automatically adapts to screen size:
+### Environment Variables
 
-- **Mobile** (< 768px): Conservative 400px max width with 3:4 aspect ratio
-- **Desktop** (≥ 768px): Dynamic 600-800px width with 1:1 aspect ratio for perfect squares
-- **Automatic scaling**: Based on window width using ElizaOS responsive conventions
-- **ComfyUI optimized**: Specifically designed for 1024x1024 square AI-generated images
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `COMFYUI_API_URL` | ComfyUI server URL | `http://comfyui:8188` |
+| `COMFYUI_API_KEY` | ComfyUI API key (optional) | None |
 
-### Perfect Display Results
-- **Small screens**: Optimized mobile experience without overflow
-- **Large screens**: Full utilization of available space with proper aspect ratios  
-- **All devices**: Maintains image quality and proportions
+### XTTS Requirements
+
+The XTTS functionality requires:
+- **XTTS Custom Node**: Must be installed in ComfyUI
+- **Reference Audio Files**: Available in ComfyUI input directory (default: `en_sample.wav`)
+- **Voice Cloning**: Uses reference audio for consistent voice output
+- **Multi-language Support**: English, Spanish, French, German, Italian, Portuguese, Russian, Japanese, Korean, Chinese
+
+### TTS Settings
+
+The TTS functionality uses the following ComfyUI workflow:
+- **Model**: XTTS (Text-to-Speech with Voice Cloning)
+- **Output**: Audio files via proxy endpoint
+- **Cache**: 30 minutes for TTS audio
+- **Timeout**: 30 seconds for TTS generation
+- **Voice Cloning**: Uses reference audio files for consistent voice
+
+## Architecture
+
+### Proxy Pattern
+```
+Browser → ElizaOS Proxy → ComfyUI External Instance
+```
+
+### Endpoints
+- `/api/media/comfyui/image` - Image proxy
+- `/api/media/comfyui/audio` - Audio proxy  
+- `/api/media/comfyui/tts` - TTS proxy
+
+### Container Compatibility
+- Works with external ComfyUI instances
+- No additional container required
+- Supports dev containers and port forwarding
+- Relative URLs for universal access
 
 ## Development
 
+### Running Tests
 ```bash
-# Install dependencies
-bun install
+cd packages/plugin-comfyui
+elizaos test
+```
 
-# Build plugin
+### Building
+```bash
+cd packages/plugin-comfyui
 bun run build
-
-# Run tests
-bun run test
 ```
-
-### 🚨 **Critical: ElizaOS Build Process for Client Changes**
-
-If you modify client-side display behavior, you **MUST** follow this sequence:
-
-```bash
-# 1. Build client assets
-cd packages/client && bun run build
-
-# 2. Copy client files to server (ESSENTIAL STEP)
-cd packages/server && bun run build  
-
-# 3. Restart ElizaOS to serve updated files
-elizaos start
-
-# 4. Hard refresh browser to clear cache
-# Press Ctrl+Shift+F5 in your browser
-```
-
-**Why this matters**: ElizaOS serves client files from `packages/server/dist/client`, not directly from `packages/client/dist`. The server build step copies updated client assets.
-
-## 📚 **IMPORTANT: Developer Guide**
-
-**Before making ANY changes to this plugin, read the comprehensive developer guide:**
-
-👉 **[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)** 👈
-
-This guide contains **critical information** about:
-- Container networking patterns that MUST be preserved
-- CORS configurations that CANNOT be modified  
-- URL generation patterns that are REQUIRED for dev containers
-- All the fixes and architectural decisions documented in detail
-
-**Failure to follow the developer guide may break the plugin in container environments.**
 
 ## Troubleshooting
 
-### Images not displaying?
-1. **Hard refresh** browser (`Ctrl+Shift+F5`)
-2. **Check browser console** for error messages
-3. **Verify ComfyUI is running**: `curl http://comfyui:8188/queue`
-4. **Test proxy directly**: `curl -I http://localhost:3000/api/media/comfyui/health`
+### XTTS Not Working
+1. Check `COMFYUI_API_URL` is set correctly
+2. Verify ComfyUI instance is running
+3. Ensure XTTS custom node is installed in ComfyUI
+4. Check that reference audio files are available (default: `en_sample.wav`)
+5. Check browser console for errors
 
-### Common Issues
-- **"Failed to load image"** → Usually browser cache, try hard refresh
-- **Connection refused** → Check `COMFYUI_API_URL` environment variable
-- **Timeout errors** → Verify ComfyUI model is loaded (`flux1-dev-fp8.safetensors`)
+### Audio Not Playing
+1. Verify proxy URL includes `/api/media/comfyui/tts`
+2. Check browser console for CORS errors
+3. Ensure audio format is supported by browser
+4. Try refreshing the page
 
-## License
+### TTS Toggle Not Appearing
+1. Check if TTS toggle is in chat header
+2. Verify localStorage is working
+3. Check browser console for errors
+4. Ensure plugin is loaded correctly
 
-MIT
-
----
-
-**This plugin has been battle-tested in dev container environments. All architectural decisions are documented in the developer guide for maintainability and future development.**
+### Voice Cloning Issues
+1. Ensure reference audio file exists in ComfyUI input directory
+2. Check audio file format (WAV recommended)
+3. Verify XTTS_INFER node is available in ComfyUI
+4. Test with different reference audio files

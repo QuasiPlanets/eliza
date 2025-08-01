@@ -1,0 +1,530 @@
+# TTS API Integration Guide for ElizaOS
+
+*A comprehensive guide for integrating TTS (Text-to-Speech) functionality into ElizaOS using the ComfyUI XTTS workflow*
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [API Functions](#api-functions)
+3. [Integration Examples](#integration-examples)
+4. [Response Formats](#response-formats)
+5. [Error Handling](#error-handling)
+6. [Best Practices](#best-practices)
+7. [Quick Start](#quick-start)
+
+---
+
+## Overview
+
+The TTS API provides ElizaOS with the ability to generate high-quality speech from text using ComfyUI's XTTS voice cloning model. All functions are located in `/workspace/simple_tts_client.py` and follow the same patterns as the audio and image clients.
+
+### Key Features
+- ✅ **Voice Cloning**: Uses reference audio files for consistent voice output
+- ✅ **Multi-language Support**: Supports English, Spanish, French, and other languages
+- ✅ **Browser Accessible URLs**: All generated audio is accessible via localhost
+- ✅ **Async Support**: Can be wrapped for asynchronous operations
+- ✅ **Robust Error Handling**: Comprehensive error reporting and status checking
+
+---
+
+## API Functions
+
+### Primary Functions
+
+#### 1. `generate_tts_simple(text, reference_audio, language, temperature, speed)`
+
+**Purpose**: Generate TTS with simple parameters
+
+**Parameters**:
+- `text` (str): Text to convert to speech
+- `reference_audio` (str): Path to reference audio file for voice cloning (default: "en_sample.wav")
+- `language` (str): Language code (en, es, fr, etc.) (default: "en")
+- `temperature` (float): Generation randomness 0.0-1.0 (default: 0.7)
+- `speed` (float): Speech speed multiplier (default: 1.0)
+
+**Returns**: Dict with success status, prompt_id, and message
+
+#### 2. `get_tts_status_simple(prompt_id)`
+
+**Purpose**: Check if TTS generation is complete and get URLs
+
+**Parameters**:
+- `prompt_id` (str): The ComfyUI prompt ID from generate_tts_simple()
+
+**Returns**: Dict with status and TTS URLs (if completed)
+
+#### 3. `wait_for_tts_completion(prompt_id, max_wait, check_interval)`
+
+**Purpose**: Wait for TTS generation to complete and return URLs
+
+**Parameters**:
+- `prompt_id` (str): The ComfyUI prompt ID
+- `max_wait` (int): Maximum time to wait in seconds (default: 300)
+- `check_interval` (int): How often to check status in seconds (default: 5)
+
+**Returns**: Dict with final status and TTS URLs
+
+#### 4. `get_recent_tts_simple(limit)`
+
+**Purpose**: Get recent TTS generations with browser-accessible URLs
+
+**Parameters**:
+- `limit` (int): Maximum number of recent TTS generations to return (default: 10)
+
+**Returns**: Dict with recent TTS generations and their URLs
+
+---
+
+## Integration Examples
+
+### Basic TTS Generation
+
+```python
+from simple_tts_client import generate_tts_simple
+
+# Simple TTS generation
+result = generate_tts_simple(
+    text="Hello, how are you today? What is your name?",
+    reference_audio="en_sample.wav",
+    language="en",
+    temperature=0.7,
+    speed=1.0
+)
+
+if result['success']:
+    print(f"TTS generation started: {result['prompt_id']}")
+else:
+    print(f"TTS generation failed: {result.get('error')}")
+```
+
+### Advanced TTS Generation
+
+```python
+from simple_tts_client import generate_tts_simple, wait_for_tts_completion
+
+# Advanced TTS with completion waiting
+result = generate_tts_simple(
+    text="The Hitchhiker's Guide to the Galaxy is a comedy science fiction series...",
+    reference_audio="en_sample.wav",
+    language="en",
+    temperature=0.68,
+    speed=1.2
+)
+
+if result['success']:
+    # Wait for completion
+    completion = wait_for_tts_completion(result['prompt_id'], max_wait=300)
+    
+    if completion['success'] and completion['tts_urls']:
+        audio_url = completion['tts_urls'][0]
+        print(f"TTS completed! Audio available at: {audio_url}")
+    else:
+        print(f"TTS failed: {completion.get('error')}")
+```
+
+### Async Integration for ElizaOS
+
+```python
+import asyncio
+from simple_tts_client import generate_tts_simple, wait_for_tts_completion
+
+async def elizaos_tts_generate(text: str, voice_file: str = "en_sample.wav"):
+    """
+    ElizaOS plugin function to generate TTS
+    """
+    try:
+        # Start TTS generation
+        result = generate_tts_simple(
+            text=text,
+            reference_audio=voice_file,
+            language="en",
+            temperature=0.7,
+            speed=1.0
+        )
+        
+        if not result['success']:
+            return {
+                "error": result.get('error', 'TTS generation failed'),
+                "details": result.get('details', 'Unknown error')
+            }
+        
+        # Wait for completion
+        completion = wait_for_tts_completion(
+            prompt_id=result['prompt_id'],
+            max_wait=300  # 5 minutes timeout
+        )
+        
+        if completion['success'] and completion['tts_urls']:
+            return {
+                "success": True,
+                "audio_urls": completion['tts_urls'],
+                "message": "TTS generation completed successfully"
+            }
+        else:
+            return {
+                "error": "TTS generation failed or timed out",
+                "details": completion.get('error', 'Unknown error')
+            }
+            
+    except Exception as e:
+        return {
+            "error": "Exception in TTS generation",
+            "details": str(e)
+        }
+
+# Usage in ElizaOS
+async def handle_tts_request(user_text: str):
+    tts_result = await elizaos_tts_generate(user_text)
+    
+    if tts_result.get('success'):
+        audio_urls = tts_result['audio_urls']
+        # ElizaOS can now play the audio or return URLs to user
+        return f"TTS generated! Audio available at: {audio_urls[0]}"
+    else:
+        return f"TTS generation failed: {tts_result.get('error')}"
+```
+
+### Status Checking
+
+```python
+from simple_tts_client import get_tts_status_simple
+
+# Check TTS status
+status = get_tts_status_simple("your_prompt_id")
+
+if status['success']:
+    if status['status'] == 'completed':
+        print(f"TTS completed! URLs: {status['tts_urls']}")
+    elif status['status'] == 'running':
+        print("TTS is currently running...")
+    elif status['status'] == 'pending':
+        print(f"TTS is pending: {status['message']}")
+else:
+    print(f"Status check failed: {status.get('error')}")
+```
+
+### Get Recent TTS
+
+```python
+from simple_tts_client import get_recent_tts_simple
+
+# Get recent TTS generations
+recent = get_recent_tts_simple(limit=5)
+
+if recent['success']:
+    print(f"Found {recent['total']} recent TTS generations:")
+    for tts in recent['tts']:
+        print(f"  Prompt ID: {tts['prompt_id']}")
+        print(f"  URLs: {tts['tts_urls']}")
+else:
+    print(f"Failed to get recent TTS: {recent.get('error')}")
+```
+
+---
+
+## Response Formats
+
+### TTS Generation Response
+
+```json
+{
+  "success": true,
+  "prompt_id": "abc123def456",
+  "message": "TTS generation started: Hello, how are you today?...",
+  "status": "queued",
+  "tts_urls": [],
+  "note": "Check status with get_tts_status_simple(prompt_id)"
+}
+```
+
+### TTS Status Response
+
+```json
+{
+  "success": true,
+  "status": "completed",
+  "message": "TTS generation completed",
+  "tts_urls": [
+    "http://localhost:8188/view?filename=ComfyUI_20240731_123456.wav&type=output"
+  ],
+  "total_audio": 1
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "error": "TTS generation failed",
+  "details": "ComfyUI is not running",
+  "tts_urls": []
+}
+```
+
+### Status Types
+
+- `"queued"`: TTS generation has been queued
+- `"running"`: TTS generation is currently running
+- `"pending"`: TTS generation is waiting in queue
+- `"completed"`: TTS generation completed successfully
+- `"completed_error"`: TTS completed but failed to get URLs
+- `"timeout"`: TTS generation timed out
+- `"unknown"`: Prompt not found in history or queue
+
+---
+
+## Error Handling
+
+### Common Error Scenarios
+
+#### 1. ComfyUI Not Running
+```python
+{
+  "success": false,
+  "error": "ComfyUI is not running",
+  "details": "ComfyUI is not accessible: Connection refused"
+}
+```
+
+#### 2. TTS Generation Failed
+```python
+{
+  "success": false,
+  "error": "Failed to generate TTS",
+  "details": "XTTS model not found"
+}
+```
+
+#### 3. Timeout Error
+```python
+{
+  "success": false,
+  "status": "timeout",
+  "error": "TTS generation did not complete within 300 seconds",
+  "tts_urls": []
+}
+```
+
+### Error Handling Best Practices
+
+```python
+def safe_tts_generation(text: str):
+    try:
+        result = generate_tts_simple(text=text)
+        
+        if not result['success']:
+            # Log error for debugging
+            print(f"TTS Error: {result.get('error')}")
+            print(f"Details: {result.get('details')}")
+            return None
+        
+        # Wait for completion with error handling
+        completion = wait_for_tts_completion(result['prompt_id'])
+        
+        if not completion['success']:
+            print(f"Completion Error: {completion.get('error')}")
+            return None
+        
+        return completion['tts_urls'][0] if completion['tts_urls'] else None
+        
+    except Exception as e:
+        print(f"Exception in TTS generation: {e}")
+        return None
+```
+
+---
+
+## Best Practices
+
+### 1. Always Check Success Status
+```python
+result = generate_tts_simple(text="Hello world")
+if result['success']:
+    # Proceed with TTS generation
+    pass
+else:
+    # Handle error
+    print(f"Error: {result.get('error')}")
+```
+
+### 2. Use Appropriate Timeouts
+```python
+# For short text, use shorter timeout
+completion = wait_for_tts_completion(prompt_id, max_wait=120)
+
+# For long text, use longer timeout
+completion = wait_for_tts_completion(prompt_id, max_wait=600)
+```
+
+### 3. Handle Different Status Types
+```python
+status = get_tts_status_simple(prompt_id)
+
+if status['status'] == 'completed':
+    # Process completed TTS
+    audio_url = status['tts_urls'][0]
+elif status['status'] in ['running', 'pending']:
+    # Wait and check again
+    time.sleep(5)
+    status = get_tts_status_simple(prompt_id)
+else:
+    # Handle error or unknown status
+    print(f"Status: {status['status']}")
+```
+
+### 4. Use Browser Accessible URLs
+```python
+# All returned URLs are browser accessible from localhost
+audio_url = "http://localhost:8188/view?filename=ComfyUI_20240731_123456.wav&type=output"
+
+# Can be played directly or embedded in web interfaces
+```
+
+### 5. Async Integration
+```python
+# For ElizaOS async operations
+async def async_tts_generate(text: str):
+    # Run synchronous TTS function in executor
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, generate_tts_simple, text)
+    return result
+```
+
+---
+
+## Quick Start
+
+### Minimal Integration
+
+```python
+from simple_tts_client import generate_tts_simple, wait_for_tts_completion
+
+def elizaos_tts(text: str):
+    # Generate TTS
+    result = generate_tts_simple(text=text)
+    
+    if result['success']:
+        # Wait for completion
+        completion = wait_for_tts_completion(result['prompt_id'])
+        
+        if completion['success']:
+            return completion['tts_urls'][0]  # Return first audio URL
+        else:
+            return f"TTS failed: {completion.get('error')}"
+    else:
+        return f"TTS failed: {result.get('error')}"
+
+# Usage
+audio_url = elizaos_tts("Hello, how are you today?")
+print(f"Audio available at: {audio_url}")
+```
+
+### Advanced Integration
+
+```python
+import asyncio
+from simple_tts_client import generate_tts_simple, wait_for_tts_completion
+
+async def elizaos_advanced_tts(text: str, voice_file: str = "en_sample.wav"):
+    """
+    Advanced TTS generation for ElizaOS with full error handling
+    """
+    try:
+        # Generate TTS
+        result = generate_tts_simple(
+            text=text,
+            reference_audio=voice_file,
+            language="en",
+            temperature=0.7,
+            speed=1.0
+        )
+        
+        if not result['success']:
+            return {
+                "success": False,
+                "error": result.get('error', 'TTS generation failed'),
+                "audio_url": None
+            }
+        
+        # Wait for completion
+        completion = wait_for_tts_completion(
+            prompt_id=result['prompt_id'],
+            max_wait=300
+        )
+        
+        if completion['success'] and completion['tts_urls']:
+            return {
+                "success": True,
+                "error": None,
+                "audio_url": completion['tts_urls'][0]
+            }
+        else:
+            return {
+                "success": False,
+                "error": completion.get('error', 'TTS completion failed'),
+                "audio_url": None
+            }
+            
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Exception: {str(e)}",
+            "audio_url": None
+        }
+
+# Usage in ElizaOS
+async def handle_user_tts_request(user_text: str):
+    result = await elizaos_advanced_tts(user_text)
+    
+    if result['success']:
+        return f"TTS generated successfully! Audio: {result['audio_url']}"
+    else:
+        return f"TTS generation failed: {result['error']}"
+```
+
+---
+
+## File Structure
+
+```
+/workspace/
+├── simple_tts_client.py          # Main TTS client functions
+├── local_workflow_client.py      # ComfyUI workflow client (includes TTS)
+├── url_mapper.py                 # URL mapping utilities
+└── TTS_API_INTEGRATION_GUIDE.md # This documentation
+```
+
+---
+
+## Dependencies
+
+The TTS API requires:
+- ComfyUI running on `http://localhost:8188`
+- XTTS custom node installed and working
+- Reference audio files in ComfyUI input directory
+- Python packages: `requests`, `json`, `time`, `typing`
+
+---
+
+## Testing
+
+### Test TTS Generation
+```python
+# Test basic functionality
+python -c "from simple_tts_client import generate_tts_simple; print('✅ TTS client imports successfully')"
+```
+
+### Test ComfyUI Connection
+```python
+# Test ComfyUI status
+python -c "from local_workflow_client import check_comfyui_status; print(check_comfyui_status())"
+```
+
+---
+
+*Last Updated: July 31, 2025*
+*Status: ✅ READY FOR ELIZAOS INTEGRATION*
+*API Version: 1.0*

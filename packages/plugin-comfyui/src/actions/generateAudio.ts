@@ -1,13 +1,22 @@
-import type { Action, IAgentRuntime, Memory, State, ActionResult } from '@elizaos/core';
+import type { Action, IAgentRuntime, Memory, State, HandlerCallback } from '@elizaos/core';
+import { ContentType } from '@elizaos/core';
 import { ComfyUIService } from '../service';
+import { v4 } from 'uuid';
 
 export const generateAudioAction: Action = {
     name: 'GENERATE_AUDIO',
     similes: ['CREATE_AUDIO', 'GENERATE_SOUND', 'MAKE_AUDIO', 'GENERATE_MUSIC', 'CREATE_MUSIC'],
     description: 'Generates audio using ComfyUI based on a text prompt (experimental feature)',
 
-    validate: async (_runtime: IAgentRuntime, message: Memory, _state?: State): Promise<boolean> => {
+    validate: async (runtime: IAgentRuntime, message: Memory, _state?: State): Promise<boolean> => {
         const text = message.content?.text?.toLowerCase() || '';
+
+        // Only proceed if ComfyUI is configured
+        const comfyuiUrl = runtime.getSetting('COMFYUI_API_URL') || process.env.COMFYUI_API_URL;
+        if (!comfyuiUrl?.trim()) {
+            console.log(`[ComfyUI Audio] Validation failed: No COMFYUI_API_URL configured`);
+            return false;
+        }
 
         // Check for audio generation keywords
         const audioKeywords = [
@@ -16,15 +25,22 @@ export const generateAudioAction: Action = {
             'compose music', 'create song', 'generate song'
         ];
 
-        return audioKeywords.some(keyword => text.includes(keyword));
+        const hasAudioKeyword = audioKeywords.some(keyword => text.includes(keyword));
+        console.log(`[ComfyUI Audio] Validation - Text: "${text}"`);
+        console.log(`[ComfyUI Audio] Validation - Has audio keyword: ${hasAudioKeyword}`);
+        console.log(`[ComfyUI Audio] Validation - ComfyUI URL: ${comfyuiUrl}`);
+        console.log(`[ComfyUI Audio] Validation - Result: ${hasAudioKeyword}`);
+
+        return hasAudioKeyword;
     },
 
     handler: async (
         runtime: IAgentRuntime,
         message: Memory,
         _state?: State,
-        _options?: { [key: string]: unknown }
-    ): Promise<ActionResult> => {
+        _options?: any,
+        callback?: HandlerCallback
+    ): Promise<void> => {
         try {
             const text = message.content?.text || '';
 
@@ -33,45 +49,55 @@ export const generateAudioAction: Action = {
             const prompt = promptMatch ? promptMatch[1].trim() : text;
 
             if (!prompt) {
-                return {
-                    success: false,
-                    text: 'Please provide a description of the audio you want me to generate.',
-                    error: 'No audio prompt found in message'
-                };
+                if (callback) {
+                    await callback({
+                        text: 'Please provide a description of the audio you want me to generate.',
+                        thought: 'No valid audio prompt found in the user message.'
+                    });
+                }
+                return;
             }
 
             // Get the ComfyUI service
             const comfyuiService = runtime.getService('comfyui') as ComfyUIService;
             if (!comfyuiService) {
-                return {
-                    success: false,
-                    text: 'ComfyUI service is not available. Please check your configuration.',
-                    error: 'ComfyUI service not found'
-                };
+                if (callback) {
+                    await callback({
+                        text: 'ComfyUI service is not available. Please check your configuration.',
+                        thought: 'ComfyUI service is not registered with the runtime.'
+                    });
+                }
+                return;
             }
 
-            // Check if audio generation is implemented
-            try {
-                const result = await comfyuiService.generateAudio(prompt);
+            // Send initial response
+            if (callback) {
+                await callback({
+                    text: `I'm generating audio based on your prompt: "${prompt}". This will take 2-3 minutes with the Stable Audio model. Please wait...`,
+                    thought: `Starting ComfyUI audio generation with prompt: "${prompt}". Using Stable Audio model which requires extended processing time.`,
+                    actions: ['GENERATE_AUDIO']
+                });
+            }
 
-                return {
-                    success: true,
+            // Generate the audio
+            const result = await comfyuiService.generateAudio(prompt);
+
+            console.log(`[ComfyUI Action] Audio generated and accessible via proxy: ${result.url}`);
+
+            // Send the response with the generated audio
+            if (callback) {
+                await callback({
                     text: `I've generated audio based on your prompt: "${prompt}". The audio has been created successfully.`,
-                    data: {
-                        audioUrl: result.url,
-                        prompt: prompt,
-                        metadata: result.metadata
-                    }
-                };
-            } catch (error: any) {
-                if (error.message.includes('not yet implemented')) {
-                    return {
-                        success: false,
-                        text: `Audio generation is not yet implemented in the ComfyUI plugin. Currently, I can only generate images. Please try asking me to generate an image instead.`,
-                        error: 'Audio generation feature not implemented'
-                    };
-                }
-                throw error; // Re-throw other errors to be handled by outer catch
+                    attachments: [{
+                        id: v4(),
+                        url: result.url, // Use proxy URL for universal access
+                        title: `Generated Audio: ${prompt.substring(0, 50)}...`,
+                        contentType: ContentType.AUDIO,
+                        description: prompt
+                    }],
+                    thought: `Successfully generated audio using ComfyUI with prompt: "${prompt}"`,
+                    actions: ['GENERATE_AUDIO']
+                });
             }
 
         } catch (error: any) {
@@ -87,11 +113,12 @@ export const generateAudioAction: Action = {
                 errorMessage += 'Please try again with a different prompt.';
             }
 
-            return {
-                success: false,
-                text: errorMessage,
-                error: `Audio generation failed: ${error.message}`
-            };
+            if (callback) {
+                await callback({
+                    text: errorMessage,
+                    thought: `ComfyUI audio generation failed: ${error.message || 'Unknown error'}`
+                });
+            }
         }
     },
 
@@ -103,7 +130,7 @@ export const generateAudioAction: Action = {
             },
             {
                 name: '{{name2}}',
-                content: { text: 'Audio generation is not yet implemented in the ComfyUI plugin. Currently, I can only generate images. Please try asking me to generate an image instead.' }
+                content: { text: "I'm generating audio of ocean waves for you. This will take 2-3 minutes with the Stable Audio model. Please wait..." }
             }
         ],
         [
@@ -113,7 +140,7 @@ export const generateAudioAction: Action = {
             },
             {
                 name: '{{name2}}',
-                content: { text: 'Audio generation is not yet implemented in the ComfyUI plugin. Currently, I can only generate images. Please try asking me to generate an image instead.' }
+                content: { text: "I'm generating peaceful meditation music for you. This will take 2-3 minutes with the Stable Audio model. Please wait..." }
             }
         ],
         [
@@ -123,7 +150,7 @@ export const generateAudioAction: Action = {
             },
             {
                 name: '{{name2}}',
-                content: { text: 'Audio generation is not yet implemented in the ComfyUI plugin. Currently, I can only generate images. Please try asking me to generate an image instead.' }
+                content: { text: "I'm generating sci-fi movie sound effects for you. This will take 2-3 minutes with the Stable Audio model. Please wait..." }
             }
         ]
     ]
