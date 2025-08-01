@@ -11,8 +11,8 @@ import { getAgentAvatar } from '@/lib/utils';
 interface ChatMessageListComponentProps {
   messages: UiMessage[];
   isLoadingMessages: boolean;
-  chatType: ChannelType.GROUP | ChannelType.DM;
-  currentClientEntityId: string;
+  chatType: ChannelType;
+  currentClientEntityId: UUID;
   targetAgentData?: Agent;
   allAgents: Partial<Agent>[];
   animatedMessageId: string | null;
@@ -27,6 +27,7 @@ interface ChatMessageListComponentProps {
   onDeleteMessage: (messageId: string) => void;
   onRetryMessage: (messageText: string) => void;
   selectedGroupAgentId?: UUID | null;
+  ttsEnabled?: boolean;
 }
 
 export const ChatMessageListComponent: React.FC<ChatMessageListComponentProps> = ({
@@ -48,6 +49,7 @@ export const ChatMessageListComponent: React.FC<ChatMessageListComponentProps> =
   onDeleteMessage,
   onRetryMessage,
   selectedGroupAgentId,
+  ttsEnabled,
 }) => {
   // Filter messages based on selected agent in group chat
   const filteredMessages = React.useMemo(() => {
@@ -108,9 +110,9 @@ export const ChatMessageListComponent: React.FC<ChatMessageListComponentProps> =
                     <AvatarImage
                       src={getAgentAvatar(
                         senderAgent ||
-                          (agentAvatarMap && message.senderId && allAgents
-                            ? allAgents.find((a: Partial<Agent>) => a.id === message.senderId)
-                            : undefined)
+                        (agentAvatarMap && message.senderId && allAgents
+                          ? allAgents.find((a: Partial<Agent>) => a.id === message.senderId)
+                          : undefined)
                       )}
                     />
                   </Avatar>
@@ -129,6 +131,7 @@ export const ChatMessageListComponent: React.FC<ChatMessageListComponentProps> =
                 getAgentInMessage={chatType === ChannelType.GROUP ? getAgentInMessage : undefined}
                 agentAvatarMap={chatType === ChannelType.GROUP ? agentAvatarMap : undefined}
                 chatType={chatType}
+                ttsEnabled={ttsEnabled}
               />
             </ChatBubble>
           </div>

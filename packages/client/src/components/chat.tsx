@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import ConfirmationDialog from '@/components/confirmation-dialog';
 import { useConfirmation } from '@/hooks/use-confirmation';
 import { ChatBubbleMessage, ChatBubbleTimestamp } from '@/components/ui/chat/chat-bubble';
-import ChatTtsButton from '@/components/ui/chat/chat-tts-button';
 import { Markdown } from '@/components/ui/chat/markdown';
 import { AnimatedMarkdown } from '@/components/ui/chat/animated-markdown';
 import { useAutoScroll } from '@/components/ui/chat/hooks/useAutoScroll';
@@ -18,6 +17,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SplitButton } from '@/components/ui/split-button';
 import { CHAT_SOURCE, GROUP_CHAT_SOURCE, USER_NAME } from '@/constants';
 import { useFileUpload } from '@/hooks/use-file-upload';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+import ChatTtsButton from '@/components/ui/chat/chat-tts-button';
+import TtsToggleButton from '@/components/ui/chat/tts-toggle-button';
 import {
   useAgent,
   useAgentsWithDetails,
@@ -135,6 +137,7 @@ export function MessageContent({
   getAgentInMessage,
   agentAvatarMap,
   chatType,
+  ttsEnabled,
 }: {
   message: UiMessage;
   agentForTts?: Agent | Partial<Agent> | null;
@@ -145,6 +148,7 @@ export function MessageContent({
   getAgentInMessage?: (agentId: UUID) => Partial<Agent> | undefined;
   agentAvatarMap?: Record<UUID, string | null>;
   chatType?: ChannelType;
+  ttsEnabled?: boolean;
 }) {
   return (
     <div className="flex flex-col w-full">
@@ -222,11 +226,14 @@ export function MessageContent({
         <div
           className={`flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
         >
-          {!isUser && message.text && !message.isLoading && agentForTts?.id && (
+          {!isUser && message.text && !message.isLoading && agentForTts?.id && ttsEnabled && (
             <>
               <CopyButton text={message.text} />
               <ChatTtsButton agentId={agentForTts.id} text={message.text} />
             </>
+          )}
+          {!isUser && message.text && !message.isLoading && !ttsEnabled && (
+            <CopyButton text={message.text} />
           )}
           {isUser && message.text && !message.isLoading && onRetry && (
             <RetryButton onClick={() => onRetry(message)} />
@@ -244,8 +251,10 @@ export default function Chat({
   serverId,
   initialDmChannelId,
 }: UnifiedChatViewProps) {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const location = useLocation();
 
   // Use persistent sidebar state
   const { isVisible: showSidebar, setSidebarVisible, toggleSidebar } = useSidebarState();
@@ -256,6 +265,9 @@ export default function Chat({
     setMainPanelSize,
     setSidebarPanelSize,
   } = usePanelWidthState();
+
+  // Add TTS toggle state
+  const [ttsEnabled, setTtsEnabled] = useLocalStorage('eliza-tts-enabled', false);
 
   // Consolidate all chat UI state into a single object (excluding showSidebar which is now managed separately)
   const [chatState, setChatState] = useState<ChatUIState>({
@@ -269,11 +281,8 @@ export default function Chat({
     isMobile: false,
   });
 
-  const location = useLocation();
   const state = location.state as ChatLocationState | null;
   const forceNew = state?.forceNew || false;
-
-  const navigate = useNavigate();
 
   const [shouldForceNew, setShouldForceNew] = useState(forceNew);
 
@@ -307,10 +316,10 @@ export default function Chat({
   // Convert AgentWithStatus to Agent, ensuring required fields have defaults
   const targetAgentData: Agent | undefined = agentDataResponse?.data
     ? ({
-        ...agentDataResponse.data,
-        createdAt: agentDataResponse.data.createdAt || Date.now(),
-        updatedAt: agentDataResponse.data.updatedAt || Date.now(),
-      } as Agent)
+      ...agentDataResponse.data,
+      createdAt: agentDataResponse.data.createdAt || Date.now(),
+      updatedAt: agentDataResponse.data.updatedAt || Date.now(),
+    } as Agent)
     : undefined;
 
   const { handleDelete: handleDeleteAgent, isDeleting: isDeletingAgent } =
@@ -1170,6 +1179,12 @@ export default function Chat({
           </div>
 
           <div className="flex gap-1 sm:gap-2 items-center flex-shrink-0">
+            {/* Add TTS Toggle */}
+            <TtsToggleButton
+              isEnabled={ttsEnabled}
+              onToggle={setTtsEnabled}
+            />
+
             {chatType === ChannelType.DM && (
               <div className="flex items-center gap-2">
                 {agentDmChannels.length > 0 && (
@@ -1216,8 +1231,8 @@ export default function Chat({
                                 <span className="text-xs text-muted-foreground">
                                   {moment(
                                     channel.metadata?.createdAt ||
-                                      channel.updatedAt ||
-                                      channel.createdAt
+                                    channel.updatedAt ||
+                                    channel.createdAt
                                   ).fromNow()}
                                 </span>
                               </div>
@@ -1462,6 +1477,7 @@ export default function Chat({
                   onDeleteMessage={handleDeleteMessage}
                   onRetryMessage={handleRetryMessage}
                   selectedGroupAgentId={chatState.selectedGroupAgentId}
+                  ttsEnabled={ttsEnabled}
                 />
               </div>
 
@@ -1530,6 +1546,7 @@ export default function Chat({
                         onDeleteMessage={handleDeleteMessage}
                         onRetryMessage={handleRetryMessage}
                         selectedGroupAgentId={chatState.selectedGroupAgentId}
+                        ttsEnabled={ttsEnabled}
                       />
                     </div>
 
