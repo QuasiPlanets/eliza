@@ -2,10 +2,12 @@ import type { Plugin } from '@elizaos/core';
 import { ModelType } from '@elizaos/core';
 import { generateAudioAction } from './actions/generateAudio';
 import { generateImageAction } from './actions/generateImage';
+import { generateTTSAction } from './actions/generateTTS';
 import { queueStatusAction } from './actions/queueStatus';
 import { interruptGenerationAction } from './actions/interruptGeneration';
 import { ComfyUIService } from './service';
 import { handleImageGeneration } from './models/imageHandler';
+import { handleTTSGeneration } from './models/ttsHandler';
 
 const comfyuiPlugin: Plugin = {
     name: '@elizaos/plugin-comfyui',
@@ -16,15 +18,17 @@ const comfyuiPlugin: Plugin = {
     actions: [
         // Don't include generateImageAction here since we manually register it in init
         generateAudioAction,
+        generateTTSAction,
         queueStatusAction,
         interruptGenerationAction
     ],
 
     services: [ComfyUIService],
 
-    // Register model handler for image generation
+    // Register model handlers for image and TTS generation
     models: {
         [ModelType.IMAGE]: handleImageGeneration,
+        [ModelType.TEXT_TO_SPEECH]: handleTTSGeneration,
     },
 
     init: async (_config: Record<string, string>, runtime) => {

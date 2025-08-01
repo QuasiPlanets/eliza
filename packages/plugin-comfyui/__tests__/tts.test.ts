@@ -15,6 +15,8 @@ describe('ComfyUI Plugin XTTS Generation', () => {
         expect(workflow['3'].class_type).toBe('XTTS_INFER');
         expect(workflow['2'].class_type).toBe('LoadAudioPath');
         expect(workflow['1'].class_type).toBe('PreViewAudio');
+        // No SaveAudio node available in this ComfyUI installation
+        expect(workflow['4']).toBeUndefined();
     });
 
     it('should include XTTS parameters in workflow', () => {

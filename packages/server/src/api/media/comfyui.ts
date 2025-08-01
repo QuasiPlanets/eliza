@@ -27,6 +27,15 @@ export function createComfyUIMediaRouter(): express.Router {
         res.status(204).send();
     });
 
+    // Handle CORS preflight requests for TTS
+    router.options('/tts', (req: express.Request, res: express.Response) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Max-Age', '86400');
+        res.status(204).send();
+    });
+
     // Proxy ComfyUI images: /api/media/comfyui/image?url=encoded_url
     router.get('/image', async (req: express.Request, res: express.Response) => {
         try {
@@ -154,6 +163,74 @@ export function createComfyUIMediaRouter(): express.Router {
                 res.status(504).json({ error: 'ComfyUI request timeout' });
             } else {
                 res.status(500).json({ error: 'Failed to fetch audio from ComfyUI' });
+            }
+        }
+    });
+
+    // Proxy ComfyUI TTS: /api/media/comfyui/tts?url=encoded_url
+    router.get('/tts', async (req: express.Request, res: express.Response) => {
+        try {
+            const ttsUrl = req.query.url as string;
+
+            if (!ttsUrl) {
+                res.status(400).json({ error: 'Missing TTS URL parameter' });
+                return;
+            }
+
+            // Decode the URL
+            const decodedUrl = decodeURIComponent(ttsUrl);
+
+            // Validate that it's a ComfyUI URL to prevent abuse
+            if (!decodedUrl.includes('/view?') || !decodedUrl.includes('filename=')) {
+                res.status(400).json({ error: 'Invalid ComfyUI TTS URL format' });
+                return;
+            }
+
+            logger.debug(`[ComfyUI TTS Proxy] Fetching TTS audio: ${decodedUrl}`);
+
+            // Fetch the TTS audio from ComfyUI
+            const response = await axios.get(decodedUrl, {
+                responseType: 'stream',
+                timeout: 30000, // Shorter timeout for TTS (faster than music generation)
+                headers: {
+                    'User-Agent': 'ElizaOS-ComfyUI-TTS-Proxy/1.0'
+                }
+            });
+
+            // Set appropriate headers for TTS audio
+            const contentType = response.headers['content-type'] || 'audio/wav';
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=1800'); // Cache for 30 minutes (TTS is faster)
+
+            // Add explicit CORS headers for browser requests
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            res.setHeader('Access-Control-Max-Age', '86400');
+
+            if (response.headers['content-length']) {
+                res.setHeader('Content-Length', response.headers['content-length']);
+            }
+
+            // Allow range requests for audio seeking
+            if (response.headers['accept-ranges']) {
+                res.setHeader('Accept-Ranges', response.headers['accept-ranges']);
+            }
+
+            // Pipe the TTS audio data
+            response.data.pipe(res);
+
+            logger.debug(`[ComfyUI TTS Proxy] Successfully served TTS audio`);
+
+        } catch (error: any) {
+            logger.error(`[ComfyUI TTS Proxy] Error serving TTS:`, error.message);
+
+            if (error.code === 'ECONNREFUSED') {
+                res.status(503).json({ error: 'ComfyUI service unavailable' });
+            } else if (error.code === 'ETIMEDOUT') {
+                res.status(504).json({ error: 'ComfyUI request timeout' });
+            } else {
+                res.status(500).json({ error: 'Failed to fetch TTS from ComfyUI' });
             }
         }
     });

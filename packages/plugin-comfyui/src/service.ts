@@ -582,16 +582,21 @@ export class ComfyUIService extends Service {
                 });
                 const history = historyResponse.data;
 
+                console.log(`[ComfyUI TTS Debug] Checking history for prompt ${promptId}:`, JSON.stringify(history, null, 2));
+
                 if (history[promptId] && history[promptId].outputs) {
                     const outputs = history[promptId].outputs;
-                    // XTTS workflow: XTTS_INFER node (node 3) outputs audio directly
-                    const nodeOutput = outputs['3']; // XTTS_INFER node
+                    // XTTS workflow: PreViewAudio node (node 1) outputs the audio file
+                    const nodeOutput = outputs['1']; // PreViewAudio node
+
+                    console.log(`[ComfyUI TTS Debug] Node 1 (PreViewAudio) output:`, JSON.stringify(nodeOutput, null, 2));
 
                     if (nodeOutput && nodeOutput.audio && nodeOutput.audio.length > 0) {
                         const audio = nodeOutput.audio[0];
 
                         // Create internal URL for fetching audio data
-                        const internalAudioUrl = `${this.apiUrl}/view?filename=${audio.filename}&subfolder=${audio.subfolder}&type=${audio.type}`;
+                        // Files are saved in the root output directory, not in a subfolder
+                        const internalAudioUrl = `${this.apiUrl}/view?filename=${audio}`;
 
                         // Create proxy URL that the web UI can access
                         const proxyAudioUrl = this.createTTSProxyUrl(internalAudioUrl);
@@ -601,8 +606,10 @@ export class ComfyUIService extends Service {
 
                         return {
                             url: proxyAudioUrl,
-                            filename: audio.filename
+                            filename: audio
                         };
+                    } else {
+                        console.log(`[ComfyUI TTS Debug] No audio found in node 1 output`);
                     }
                 }
 
